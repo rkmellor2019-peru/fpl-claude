@@ -628,16 +628,18 @@ function renderAll(entry,picks,transfers,history,gwFixtures){
     let xferReason='';
 
     if(isInjured){
-      // Injury: recommend best affordable upgrade regardless of price direction
+      // Injury always overrides best-in-pos — you must replace an injured player
       const affordable=xferPool.filter(e=>e.cost<=budgetTenths).sort((a,b)=>b.score-a.score)[0];
       xferAlt=affordable||null;
       xferReason='injury-replace';
+    } else if(isBestInPos){
+      // Best in position — never recommend transferring them out
+      xferReason='hold-best';
     } else if(isAboveAvg){
       // Performing well: only recommend if there's a cheaper player within 1.5pts
-      // Must be cheaper (saving > 0) and score within threshold
       const valueSwaps=xferPool
         .filter(e=>e.saving>=0.9&&e.score>=score-SIMILARITY_THRESHOLD)
-        .sort((a,b)=>b.saving-a.saving); // prioritise biggest saving
+        .sort((a,b)=>b.saving-a.saving);
       xferAlt=valueSwaps[0]||null;
       xferReason=xferAlt?'value-swap':'hold';
     } else {
@@ -682,9 +684,12 @@ function renderAll(entry,picks,transfers,history,gwFixtures){
               <div style="font-size:10px;color:var(--muted);">Score: <span style="color:var(--green)">${squadAlt.score.toFixed(1)}</span> vs yours <span style="color:#ef4444">${score.toFixed(1)}</span> · +${(squadAlt.score-score).toFixed(1)} better</div>`
           }
         </div>
-        <div style="background:${xferReason==='hold'?'rgba(255,255,255,0.02)':xferReason==='injury-replace'?'rgba(239,68,68,0.04)':'rgba(0,255,135,0.04)'};border:1px solid ${xferReason==='hold'?'rgba(255,255,255,0.07)':xferReason==='injury-replace'?'rgba(239,68,68,0.2)':'rgba(0,255,135,0.15)'};border-radius:6px;padding:7px 9px;">
-          <div style="font-size:9px;color:${xferReason==='hold'?'var(--muted)':xferReason==='injury-replace'?'#ef4444':'var(--green)'};text-transform:uppercase;letter-spacing:0.7px;font-weight:600;margin-bottom:4px;">${xferReason==='hold'?'Transfer: Hold':xferReason==='injury-replace'?'Injury Cover':'Transfer Target'}</div>
-          ${xferReason==='hold'
+        <div style="background:${(xferReason==='hold'||xferReason==='hold-best')?'rgba(255,255,255,0.02)':xferReason==='injury-replace'?'rgba(239,68,68,0.04)':'rgba(0,255,135,0.04)'};border:1px solid ${(xferReason==='hold'||xferReason==='hold-best')?'rgba(255,255,255,0.07)':xferReason==='injury-replace'?'rgba(239,68,68,0.2)':'rgba(0,255,135,0.15)'};border-radius:6px;padding:7px 9px;">
+          <div style="font-size:9px;color:${(xferReason==='hold'||xferReason==='hold-best')?'var(--muted)':xferReason==='injury-replace'?'#ef4444':'var(--green)'};text-transform:uppercase;letter-spacing:0.7px;font-weight:600;margin-bottom:4px;">${(xferReason==='hold'||xferReason==='hold-best')?'Transfer: Hold':xferReason==='injury-replace'?'Injury Cover':'Transfer Target'}</div>
+          ${xferReason==='hold-best'
+            ?`<div style="font-size:10px;color:var(--green);font-weight:500;">Best in position — do not sell</div>
+              <div style="font-size:10px;color:var(--muted);margin-top:2px;">Your top ${posLabel(pl.element_type).toLowerCase()} — keep unless injured</div>`
+            :xferReason==='hold'
             ?`<div style="font-size:10px;color:var(--green);font-weight:500;">Above avg — keep</div>
               <div style="font-size:10px;color:var(--muted);margin-top:2px;">No cheaper player within 1.5pts found</div>`
             :xferAlt
@@ -949,13 +954,22 @@ function renderAll(entry,picks,transfers,history,gwFixtures){
       .slice(0,3);
   }
 
-  // Score each XI player — worst 3 are transfer targets
+  // Score each XI player — worst 3 are transfer targets, skip best-in-position
   const scoredXI=starters.map((pick,i)=>{
     const pl=getPlayer(pick.element);
     if(!pl)return null;
     const{score,form,avgFdr}=playerScore(pl,currentGW,3);
     const stats=getPlayerStats(pick.element);
-    return{pick,pl,score,form,avgFdr,team:getTeam(pl.team),stats};
+    // Determine if this player is best in their position across the full squad
+    const samePosScores=picks.picks
+      .filter(p=>p.element!==pick.element)
+      .map(p=>{const alt=getPlayer(p.element);return alt&&alt.element_type===pl.element_type?playerScore(alt,currentGW,3).score:null;})
+      .filter(s=>s!==null);
+    const isBestInPos=!samePosScores.length||samePosScores.every(s=>s<=score);
+    const isInjured=pl.status==='i'||pl.status==='d'||pl.status==='s';
+    // Only include as a candidate if injured OR not best in their position
+    if(isBestInPos&&!isInjured)return null;
+    return{pick,pl,score,form,avgFdr,team:getTeam(pl.team),stats,isBestInPos,isInjured};
   }).filter(Boolean).sort((a,b)=>a.score-b.score);
   const worstXI2=scoredXI.slice(0,3);
 

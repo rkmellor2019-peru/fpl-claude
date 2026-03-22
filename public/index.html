@@ -344,42 +344,39 @@ input[type="text"]:focus{border-color:var(--green);}
 
 <script>
 // ─── API config ──────────────────────────────────────────────────────────────
-// VERCEL_PROXY: set this to your Vercel deployment URL, e.g.
-//   'https://your-project.vercel.app/api/fpl'
-// When set, all requests go through your authenticated Vercel proxy first,
-// falling back to public CORS proxies only if it fails.
-const VERCEL_PROXY = '/api/fpl'; // relative path works when hosted on same Vercel deployment
+const VERCEL_PROXY = '/api/fpl';
 const FPL_BASE = 'https://fantasy.premierleague.com/api';
 
-// Retry helper — waits ms before resolving
+// True only when actually hosted on Vercel (not GitHub Pages, not local file)
+const ON_VERCEL = window.location.hostname !== 'localhost' &&
+                  !window.location.hostname.includes('github.io') &&
+                  window.location.protocol !== 'file:' &&
+                  window.location.hostname !== '127.0.0.1';
+
 const wait = ms => new Promise(r => setTimeout(r, ms));
 
-async function fetchFPL(path, retries = 2) {
+async function fetchFPL(path) {
   const direct = FPL_BASE + path;
 
-  // --- Strategy 1: Vercel proxy (has auth cookies + smarter fingerprinting) ---
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    if (attempt > 0) await wait(400 * attempt);
+  // --- Strategy 1: Vercel proxy — only attempt if we're actually on Vercel ---
+  if (ON_VERCEL) {
     try {
       const r = await fetch(`${VERCEL_PROXY}?path=${encodeURIComponent(path.replace(/^\//,''))}`, {
         headers: { 'Accept': 'application/json' }
       });
       if (r.ok) return r.json();
-      // On 403/429 note it but don't throw yet — fall through to public proxies
       if (r.status === 403 || r.status === 429) {
         const body = await r.json().catch(() => ({}));
-        console.warn(`Vercel proxy ${r.status} (attempt ${attempt+1}):`, body.hint || '');
-        if (attempt === retries) break; // exhausted retries, fall through
-      } else {
-        break; // non-retryable error, fall through immediately
+        console.warn(`Vercel proxy ${r.status}:`, body.hint || '');
+        // fall through to public proxies
       }
+      // any other non-ok status — fall through
     } catch (e) {
       console.warn('Vercel proxy error:', e.message);
-      break;
     }
   }
 
-  // --- Strategy 2: allorigins.win public CORS proxy ---
+  // --- Strategy 2: allorigins.win ---
   try {
     const r = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(direct), {
       headers: { 'Accept': 'application/json' }
@@ -389,10 +386,15 @@ async function fetchFPL(path, retries = 2) {
     console.warn('allorigins failed:', e.message);
   }
 
-  // --- Strategy 3: corsproxy.io fallback ---
-  const r3 = await fetch('https://corsproxy.io/?' + encodeURIComponent(direct));
-  if (!r3.ok) throw new Error(`All proxies failed for ${path} (last status: ${r3.status})`);
-  return r3.json();
+  // --- Strategy 3: corsproxy.io ---
+  try {
+    const r = await fetch('https://corsproxy.io/?' + encodeURIComponent(direct));
+    if (r.ok) return r.json();
+  } catch (e) {
+    console.warn('corsproxy failed:', e.message);
+  }
+
+  throw new Error(`Could not reach FPL API for ${path} — all proxies failed`);
 }
 let bootstrapData=null,teamId=null,currentGW=null,snapshotText='',allFixtures=[],playerHistories={},picksData=null,allChipDefs=[
   {key:'wildcard',label:'Wildcard'},
@@ -677,7 +679,6 @@ function renderAll(entry,picks,transfers,history,gwFixtures){
     const squadAlt=isBestInPos?null:samePosSorted[0];
 
     // === TRANSFER SUGGESTION ===
-    const isInjured=pl.status==='i'||pl.status==='d'||pl.status==='s';
     const sellPx=pl.now_cost;
     const budgetTenths=sellPx+Math.floor(bank*10);
     // Position average score across all FPL players in this position (top 50 by pts for speed)

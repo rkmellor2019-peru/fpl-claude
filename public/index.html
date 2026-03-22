@@ -523,19 +523,62 @@ function playerScore(pl,gwStart,gwCount){
   return{score,form,avgFdr:avgFdr.toFixed(1),fixes,validFixes};
 }
 
+// Classify each GW in a player's history
+// Returns event type: 'played'|'unavailable'|'suspended'|'benched'|'intl'
+function classifyGW(h, playerTeamId) {
+  if (h.minutes > 0) return 'played';
+  if (h.red_cards > 0) return 'suspended'; // scored own red, next GW is suspension
+  // 0 mins, 0 pts — check if their team had a fixture
+  const teamHadFixture = allFixtures.some(f =>
+    f.event === h.round && (f.team_h === playerTeamId || f.team_a === playerTeamId) && f.finished
+  );
+  if (!teamHadFixture) return 'intl'; // team blank → likely international window or blank GW
+  return 'unavailable'; // team played but player had 0 mins — injured/not selected
+}
+
 // Get full season history + stats for a player
 function getPlayerStats(playerId){
   const hist=playerHistories[playerId];
-  if(!hist||!hist.history||!hist.history.length)return{pts:[],labels:[],avg:0,total:0,projection:0,gwsPlayed:0};
+  if(!hist||!hist.history||!hist.history.length)return{pts:[],labels:[],avg:0,cleanAvg:0,total:0,projection:0,gwsPlayed:0,gwEvents:[],redCards:0,yellowCards:0};
+  const pl=bootstrapData.elements.find(e=>e.id===playerId);
+  const teamId=pl?pl.team:null;
   const allGWs=hist.history;
   const pts=allGWs.map(h=>h.total_points);
   const labels=allGWs.map(h=>'GW'+h.round);
+
+  // Classify each GW
+  const gwEvents=allGWs.map(h=>({
+    round: h.round,
+    pts: h.total_points,
+    minutes: h.minutes,
+    event: classifyGW(h, teamId),
+    redCard: h.red_cards>0,
+    yellowCard: h.yellow_cards>0,
+  }));
+
+  // Mark the GW *after* a red card as 'suspended'
+  gwEvents.forEach((g,i)=>{
+    if(g.redCard && i+1<gwEvents.length && gwEvents[i+1].minutes===0){
+      gwEvents[i+1].event='suspended';
+    }
+  });
+
   const total=pts.reduce((a,b)=>a+b,0);
   const gwsPlayed=pts.length;
   const avg=gwsPlayed?total/gwsPlayed:0;
+
+  // Clean avg: exclude GWs where player was unavailable/suspended/intl (0 mins, no fault of form)
+  const playedGWs=gwEvents.filter(g=>g.event==='played'||g.event==='benched');
+  const cleanAvg=playedGWs.length?playedGWs.reduce((s,g)=>s+g.pts,0)/playedGWs.length:avg;
+
   const gwsLeft=38-currentGW;
-  const projection=Math.round(total+(avg*gwsLeft));
-  return{pts,labels,avg:parseFloat(avg.toFixed(1)),total,projection,gwsPlayed};
+  const projection=Math.round(total+(cleanAvg*gwsLeft));
+
+  // Season discipline totals
+  const redCards=allGWs.reduce((s,h)=>s+h.red_cards,0);
+  const yellowCards=allGWs.reduce((s,h)=>s+h.yellow_cards,0);
+
+  return{pts,labels,avg:parseFloat(avg.toFixed(1)),cleanAvg:parseFloat(cleanAvg.toFixed(1)),total,projection,gwsPlayed,gwEvents,redCards,yellowCards};
 }
 function getRecentPoints(playerId,n){
   const{pts}=getPlayerStats(playerId);
@@ -633,7 +676,7 @@ function renderAll(entry,picks,transfers,history,gwFixtures){
     const {score,form,avgFdr}=playerScore(pl,currentGW,3);
     const scoreClass=formClass(score/2);
     const chartId='chart-'+pick.element+'-'+idx;
-    chartIds.push({id:chartId,stats,playerId:pick.element,posType:pl.element_type});
+    chartIds.push({id:chartId,stats,playerId:pick.element,posType:pl.element_type,gwEvents:stats.gwEvents||[]});
     const cap=pick.is_captain?' <span style="background:var(--gk);color:#000;font-size:9px;padding:1px 4px;border-radius:2px;font-weight:700">©</span>':'';
     const vice=pick.is_vice_captain?' <span style="background:#555;color:#fff;font-size:9px;padding:1px 4px;border-radius:2px;">v</span>':'';
 
@@ -754,12 +797,27 @@ function renderAll(entry,picks,transfers,history,gwFixtures){
         <div class="squad-card-info">
           <div class="squad-card-name">${pl.web_name}${cap}${vice} ${statusBadge(pl)}${injBadgeHtml}</div>
           ${injNewsHtml}
-          <div class="squad-card-meta" style="margin-top:${injNewsHtml?'4':'1'}px">${team?team.name:''} · ${stats.gwsPlayed} GWs · Avg: <strong style="color:var(--text)">${stats.avg}pts</strong> · Proj: <strong style="color:var(--green)">${stats.projection}pts</strong></div>
+          <div class="squad-card-meta" style="margin-top:${injNewsHtml?'4':'1'}px">${team?team.name:''} · ${stats.gwsPlayed} GWs · Avg: <strong style="color:var(--text)">${stats.avg}pts</strong>${stats.cleanAvg!==stats.avg?` · Form avg: <strong style="color:var(--green)">${stats.cleanAvg}pts</strong><span style="font-size:9px;color:var(--muted)"> (excl. absences)</span>`:''}  · Proj: <strong style="color:var(--green)">${stats.projection}pts</strong></div>
+          ${(()=>{
+            const flags=[];
+            if(stats.redCards>=2)flags.push(`<span style="background:rgba(239,68,68,0.15);color:#fca5a5;font-size:9px;padding:1px 6px;border-radius:3px;border:1px solid rgba(239,68,68,0.3);">🟥 Red card risk (${stats.redCards} this season)</span>`);
+            else if(stats.yellowCards>=7)flags.push(`<span style="background:rgba(250,204,21,0.12);color:#fde68a;font-size:9px;padding:1px 6px;border-radius:3px;border:1px solid rgba(250,204,21,0.25);">⚠ Yellow card risk (${stats.yellowCards} this season)</span>`);
+            const intlGWs=stats.gwEvents?stats.gwEvents.filter(g=>g.event==='intl').length:0;
+            if(intlGWs>=2)flags.push(`<span style="background:rgba(59,130,246,0.1);color:#93c5fd;font-size:9px;padding:1px 6px;border-radius:3px;border:1px solid rgba(59,130,246,0.2);">🌍 Intl absences (${intlGWs} GWs)</span>`);
+            const unavailGWs=stats.gwEvents?stats.gwEvents.filter(g=>g.event==='unavailable').length:0;
+            if(unavailGWs>=3)flags.push(`<span style="background:rgba(107,114,128,0.15);color:#9ca3af;font-size:9px;padding:1px 6px;border-radius:3px;border:1px solid rgba(107,114,128,0.25);">🩹 Injury-prone (${unavailGWs} GWs missed)</span>`);
+            return flags.length?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">${flags.join('')}</div>`:'';
+          })()}
         </div>
         <div class="squad-card-price">£${price}m</div>
       </div>
-      <div class="form-graph-wrap" style="height:90px;margin-bottom:6px;">
+      <div class="form-graph-wrap" style="height:90px;margin-bottom:4px;">
         <canvas id="${chartId}"></canvas>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;font-size:9px;color:var(--muted);">
+        <span style="display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;background:rgba(156,163,175,0.7);border-radius:1px;transform:rotate(45deg);display:inline-block;"></span>Not played</span>
+        <span style="display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;background:rgba(251,146,60,0.9);border-radius:1px;transform:rotate(45deg);display:inline-block;"></span>Suspended</span>
+        <span style="display:flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;background:rgba(147,197,253,0.8);border-radius:1px;transform:rotate(45deg);display:inline-block;"></span>Intl / blank</span>
       </div>
       <div class="gw-fixtures">${fdrBoxes}</div>
       <div class="squad-card-score">
@@ -847,15 +905,44 @@ function renderAll(entry,picks,transfers,history,gwFixtures){
     });
     const posNames={1:'GK',2:'DEF',3:'MID',4:'FWD'};
 
-    chartIds.forEach(({id,stats,posType})=>{
+    chartIds.forEach(({id,stats,posType,gwEvents})=>{
       const canvas=document.getElementById(id);
       if(!canvas||!stats.pts.length)return;
       const pts=stats.pts;
-      const avg=stats.avg;
+      const avg=stats.cleanAvg||stats.avg; // use clean avg for the reference line
+      const rawAvg=stats.avg;
       const maxVal=posMaxMap[posType]||Math.ceil((Math.max(...pts,avg,2)+2)/2)*2;
-      // Color each point: green>=avg, amber=within 2, red<avg-2
-      const pointColors=pts.map(p=>p>=avg?'#00ff87':p>=avg-2?'#facc15':'#ef4444');
-      const pointSizes=pts.map(p=>p>=10?5:p>=6?4:3);
+
+      // Per-point styling based on event classification
+      const eventMap={'played':'played','unavailable':'unavailable','suspended':'suspended','intl':'intl','benched':'played'};
+      const evts=gwEvents.length===pts.length?gwEvents:pts.map(()=>({event:'played',redCard:false,yellowCard:false}));
+
+      const pointColors=pts.map((p,i)=>{
+        const ev=evts[i]?.event||'played';
+        if(ev==='unavailable')return'rgba(156,163,175,0.7)';  // grey — absent
+        if(ev==='suspended') return'rgba(251,146,60,0.9)';    // orange — suspended
+        if(ev==='intl')      return'rgba(147,197,253,0.8)';   // blue — international
+        if(evts[i]?.redCard) return'#ef4444';                 // red — got a red card
+        return p>=avg?'#00ff87':p>=avg-2?'#facc15':'#ef4444'; // normal form colours
+      });
+      const pointStyles=pts.map((p,i)=>{
+        const ev=evts[i]?.event||'played';
+        if(ev==='unavailable'||ev==='suspended'||ev==='intl') return'rectRot'; // diamond for events
+        return'circle';
+      });
+      const pointSizes=pts.map((p,i)=>{
+        const ev=evts[i]?.event||'played';
+        if(ev==='unavailable'||ev==='suspended'||ev==='intl') return 6;
+        return p>=10?5:p>=6?4:3;
+      });
+      const pointBorderColors=pts.map((p,i)=>{
+        const ev=evts[i]?.event||'played';
+        if(ev==='suspended') return'#fb923c';
+        if(ev==='intl')      return'#60a5fa';
+        if(ev==='unavailable') return'rgba(156,163,175,0.5)';
+        return pointColors[i];
+      });
+
       new Chart(canvas,{
         type:'line',
         data:{
@@ -876,24 +963,37 @@ function renderAll(entry,picks,transfers,history,gwFixtures){
               },
               borderWidth:2,
               pointRadius:pointSizes,
+              pointStyle:pointStyles,
               pointBackgroundColor:pointColors,
-              pointBorderColor:pointColors,
-              pointBorderWidth:0,
+              pointBorderColor:pointBorderColors,
+              pointBorderWidth:1,
               tension:0.35,
               fill:true,
               order:2
             },
             {
-              label:'Season avg ('+avg+'pts)',
+              label:`Form avg (${avg}pts, excl. absences)`,
               data:Array(pts.length).fill(avg),
-              borderColor:'rgba(250,204,21,0.6)',
+              borderColor:'rgba(0,255,135,0.5)',
               borderWidth:1.5,
               borderDash:[4,3],
               pointRadius:0,
               fill:false,
               tension:0,
               order:1
-            }
+            },
+            // Only show raw avg line if it differs meaningfully from clean avg
+            ...(Math.abs(avg-rawAvg)>=0.5?[{
+              label:`Overall avg (${rawAvg}pts)`,
+              data:Array(pts.length).fill(rawAvg),
+              borderColor:'rgba(250,204,21,0.4)',
+              borderWidth:1,
+              borderDash:[2,4],
+              pointRadius:0,
+              fill:false,
+              tension:0,
+              order:0
+            }]:[])
           ]
         },
         options:{
@@ -911,17 +1011,29 @@ function renderAll(entry,picks,transfers,history,gwFixtures){
                 boxHeight:2,
                 padding:8,
                 usePointStyle:true,
-                pointStyle:'line'
+                pointStyle:'line',
+                filter:(item)=>item.text.length<40 // hide very long labels
               }
             },
             tooltip:{
               callbacks:{
                 title:ctx=>ctx[0].label,
                 label:ctx=>{
-                  if(ctx.datasetIndex===1)return'Avg: '+avg+'pts';
+                  if(ctx.datasetIndex>0){
+                    return ctx.datasetIndex===1?`Form avg: ${avg}pts (excl. absences)`:`Overall avg: ${rawAvg}pts`;
+                  }
+                  const i=ctx.dataIndex;
                   const p=ctx.raw;
+                  const ev=evts[i]?.event||'played';
+                  const evLabels={unavailable:'Did not play (injured/not selected)',suspended:'Suspended',intl:'International duty / blank GW',played:''};
+                  const evNote=evLabels[ev]||'';
                   const diff=parseFloat((p-avg).toFixed(1));
-                  return'Points: '+p+' ('+(diff>=0?'+':'')+diff+' vs avg)';
+                  const lines=[`Points: ${p}`];
+                  if(evNote) lines.push(evNote);
+                  else lines.push(`${diff>=0?'+':''}${diff} vs form avg`);
+                  if(evts[i]?.redCard) lines.push('🟥 Red card');
+                  if(evts[i]?.yellowCard&&!evts[i]?.redCard) lines.push('🟨 Yellow card');
+                  return lines;
                 }
               },
               backgroundColor:'rgba(10,10,10,0.9)',

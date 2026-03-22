@@ -540,18 +540,77 @@ function renderAll(entry,picks,transfers,history,gwFixtures){
     const capStrip=(pick.is_captain||pick.is_vice_captain)?`<div class="cap-strip">${pick.is_captain?'Captain this week':'Vice-captain this week'} · Consider based on GW${currentGW} fixture: ${getFixStr(pl.team,gwFixtures)||'No fixture'}</div>`:'';
     const scorePct=Math.min(100,Math.round((score/12)*100));
 
-    // Find best squad alternative (same pos, in squad, not this player)
-    const squadAlt=picks.picks
+    // === SQUAD SUGGESTION ===
+    // Find all same-position squad players (excluding this one), sorted by score desc
+    const samePosSorted=picks.picks
       .filter(p=>p.element!==pick.element)
-      .map(p=>{const alt=getPlayer(p.element);if(!alt||alt.element_type!==pl.element_type)return null;const{score:as}=playerScore(alt,currentGW,3);return{pl:alt,score:as,isBench:p.position>11,team:getTeam(alt.team)};})
-      .filter(Boolean).sort((a,b)=>b.score-a.score)[0];
-    // Find best transfer target (same pos, affordable, not in squad)
+      .map(p=>{
+        const alt=getPlayer(p.element);
+        if(!alt||alt.element_type!==pl.element_type)return null;
+        const{score:as}=playerScore(alt,currentGW,3);
+        return{pl:alt,score:as,isBench:p.position>11,team:getTeam(alt.team)};
+      })
+      .filter(Boolean)
+      .sort((a,b)=>b.score-a.score);
+
+    // Is this player the best in their position in the squad?
+    const isBestInPos=!samePosSorted.length||samePosSorted[0].score<=score;
+    // Squad panel: if best, show "best in position"; else show better player as upgrade option
+    const squadAlt=isBestInPos?null:samePosSorted[0];
+
+    // === TRANSFER SUGGESTION ===
+    const isInjured=pl.status==='i'||pl.status==='d'||pl.status==='s';
     const sellPx=pl.now_cost;
     const budgetTenths=sellPx+Math.floor(bank*10);
-    const xferAlt=bootstrapData.elements
-      .filter(e=>e.element_type===pl.element_type&&e.id!==pl.id&&e.now_cost<=budgetTenths&&e.status==='a'&&!picks.picks.some(p=>p.element===e.id))
-      .map(e=>{const{score:xs}=playerScore(e,currentGW,3);return{pl:e,score:xs,team:getTeam(e.team)};})
-      .sort((a,b)=>b.score-a.score)[0];
+    // Position average score across all FPL players in this position (top 50 by pts for speed)
+    const posAvgScore=(()=>{
+      const posPlayers=bootstrapData.elements
+        .filter(e=>e.element_type===pl.element_type&&e.total_points>0)
+        .sort((a,b)=>b.total_points-a.total_points)
+        .slice(0,50);
+      const scores=posPlayers.map(e=>playerScore(e,currentGW,3).score);
+      return scores.reduce((a,b)=>a+b,0)/scores.length;
+    })();
+    const isAboveAvg=score>=posAvgScore;
+    const SIMILARITY_THRESHOLD=1.5; // within 1.5pts = "similar"
+
+    // Pool: not in squad, same pos, available (not unavailable), not same player
+    const xferPool=bootstrapData.elements.filter(e=>
+      e.element_type===pl.element_type&&
+      e.id!==pl.id&&
+      e.status!=='u'&&
+      !picks.picks.some(p=>p.element===e.id)
+    ).map(e=>{
+      const{score:xs}=playerScore(e,currentGW,3);
+      const saving=(sellPx-e.now_cost)/10; // positive = cheaper
+      return{pl:e,score:xs,saving,cost:e.now_cost,team:getTeam(e.team)};
+    });
+
+    let xferAlt=null;
+    let xferReason='';
+
+    if(isInjured){
+      // Injury: recommend best affordable upgrade regardless of price direction
+      const affordable=xferPool.filter(e=>e.cost<=budgetTenths).sort((a,b)=>b.score-a.score)[0];
+      xferAlt=affordable||null;
+      xferReason='injury-replace';
+    } else if(isAboveAvg){
+      // Performing well: only recommend if there's a cheaper player within 1.5pts
+      // Must be cheaper (saving > 0) and score within threshold
+      const valueSwaps=xferPool
+        .filter(e=>e.saving>=0.9&&e.score>=score-SIMILARITY_THRESHOLD)
+        .sort((a,b)=>b.saving-a.saving); // prioritise biggest saving
+      xferAlt=valueSwaps[0]||null;
+      xferReason=xferAlt?'value-swap':'hold';
+    } else {
+      // Underperforming: recommend best score-per-£ upgrade within budget
+      const upgrades=xferPool
+        .filter(e=>e.cost<=budgetTenths)
+        .map(e=>({...e,spv:e.score/(e.cost/10)}))
+        .sort((a,b)=>b.spv-a.spv);
+      xferAlt=upgrades[0]||null;
+      xferReason='upgrade';
+    }
 
     return`<div class="squad-card ${isBench?'bench-card':''}" data-role="${isBench?'bench':'xi'}" data-pos="pos-${pos}">
       <div class="squad-card-header">
@@ -575,19 +634,27 @@ function renderAll(entry,picks,transfers,history,gwFixtures){
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
         <div style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:6px;padding:7px 9px;">
           <div style="font-size:9px;color:var(--def);text-transform:uppercase;letter-spacing:0.7px;font-weight:600;margin-bottom:4px;">In your squad</div>
-          ${squadAlt?`
-            <div style="font-size:12px;font-weight:500;color:var(--text);">${squadAlt.pl.web_name}</div>
-            <div style="font-size:10px;color:var(--muted);">${squadAlt.team?squadAlt.team.short_name:''} · £${(squadAlt.pl.now_cost/10).toFixed(1)}m · ${squadAlt.isBench?'Bench':'XI'}</div>
-            <div style="font-size:10px;color:var(--muted);">Form: ${parseFloat(squadAlt.pl.form).toFixed(1)} · Score: <span style="color:${squadAlt.score>score?'var(--green)':'#ef4444'}">${squadAlt.score.toFixed(1)}</span>${squadAlt.score>score?' ↑ Better':' ↓ Weaker'}</div>
-          `:'<div style="font-size:10px;color:var(--muted);">No same-position option</div>'}
+          ${isBestInPos
+            ?(!samePosSorted.length
+              ?'<div style="font-size:10px;color:var(--muted);">Only '+posLabel(pl.element_type)+' in squad</div>'
+              :`<div style="font-size:10px;color:var(--green);font-weight:500;">Best ${posLabel(pl.element_type)} in squad</div>
+               <div style="font-size:10px;color:var(--muted);margin-top:2px;">No swap needed unless injured</div>`)
+            :`<div style="font-size:12px;font-weight:500;color:var(--text);">${squadAlt.pl.web_name}</div>
+              <div style="font-size:10px;color:var(--muted);">${squadAlt.team?squadAlt.team.short_name:''} · £${(squadAlt.pl.now_cost/10).toFixed(1)}m · ${squadAlt.isBench?'Bench':'XI'}</div>
+              <div style="font-size:10px;color:var(--muted);">Score: <span style="color:var(--green)">${squadAlt.score.toFixed(1)}</span> vs yours <span style="color:#ef4444">${score.toFixed(1)}</span> · +${(squadAlt.score-score).toFixed(1)} better</div>`
+          }
         </div>
-        <div style="background:rgba(0,255,135,0.04);border:1px solid rgba(0,255,135,0.15);border-radius:6px;padding:7px 9px;">
-          <div style="font-size:9px;color:var(--green);text-transform:uppercase;letter-spacing:0.7px;font-weight:600;margin-bottom:4px;">Transfer target</div>
-          ${xferAlt?`
-            <div style="font-size:12px;font-weight:500;color:var(--text);">${xferAlt.pl.web_name}</div>
-            <div style="font-size:10px;color:var(--muted);">${xferAlt.team?xferAlt.team.short_name:''} · £${(xferAlt.pl.now_cost/10).toFixed(1)}m</div>
-            <div style="font-size:10px;color:var(--muted);">Form: ${parseFloat(xferAlt.pl.form).toFixed(1)} · Score: <span style="color:${xferAlt.score>score?'var(--green)':'#ef4444'}">${xferAlt.score.toFixed(1)}</span>${xferAlt.score>score?' ↑ Upgrade':'  Similar'}</div>
-          `:'<div style="font-size:10px;color:var(--muted);">No affordable option</div>'}
+        <div style="background:${xferReason==='hold'?'rgba(255,255,255,0.02)':xferReason==='injury-replace'?'rgba(239,68,68,0.04)':'rgba(0,255,135,0.04)'};border:1px solid ${xferReason==='hold'?'rgba(255,255,255,0.07)':xferReason==='injury-replace'?'rgba(239,68,68,0.2)':'rgba(0,255,135,0.15)'};border-radius:6px;padding:7px 9px;">
+          <div style="font-size:9px;color:${xferReason==='hold'?'var(--muted)':xferReason==='injury-replace'?'#ef4444':'var(--green)'};text-transform:uppercase;letter-spacing:0.7px;font-weight:600;margin-bottom:4px;">${xferReason==='hold'?'Transfer: Hold':xferReason==='injury-replace'?'Injury Cover':'Transfer Target'}</div>
+          ${xferReason==='hold'
+            ?`<div style="font-size:10px;color:var(--green);font-weight:500;">Above avg — keep</div>
+              <div style="font-size:10px;color:var(--muted);margin-top:2px;">No cheaper player within 1.5pts found</div>`
+            :xferAlt
+              ?`<div style="font-size:12px;font-weight:500;color:var(--text);">${xferAlt.pl.web_name}</div>
+                <div style="font-size:10px;color:var(--muted);">${xferAlt.team?xferAlt.team.short_name:''} · £${(xferAlt.pl.now_cost/10).toFixed(1)}m${xferAlt.saving>0?' · <span style="color:var(--green)">saves £'+xferAlt.saving.toFixed(1)+'m</span>':''}</div>
+                <div style="font-size:10px;color:var(--muted);">Score: <span style="color:${xferAlt.score>=score-1.5?'var(--green)':'#facc15'}">${xferAlt.score.toFixed(1)}</span>${xferReason==='value-swap'?' · Similar output, better value':xferReason==='upgrade'?' · Best score/£ upgrade':' · Best available cover'}</div>`
+              :`<div style="font-size:10px;color:var(--muted);">${isAboveAvg?'No cheaper similar option':'No affordable upgrade found'}</div>`
+          }
         </div>
       </div>
     </div>`;

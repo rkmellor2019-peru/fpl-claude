@@ -5,121 +5,151 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FPL Claude — Strategy Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
-:root{--green:#00ff87;--green-dark:#00c96a;--pitch:#1a472a;--dark:#0d0d0d;--panel:#161616;--panel2:#1e1e1e;--border:rgba(255,255,255,0.07);--text:#f0f0f0;--muted:#777;--gk:#f59e0b;--def:#3b82f6;--mid:#10b981;--fwd:#ef4444;}
+:root{--green:#00ff87;--green-dark:#00c96a;--pitch:#1a472a;--dark:#0d0d0d;--panel:#161616;--panel2:#1e1e1e;--border:rgba(255,255,255,0.07);--text:#f0f0f0;--muted:#666;--gk:#f59e0b;--def:#3b82f6;--mid:#10b981;--fwd:#ef4444;}
 *{box-sizing:border-box;margin:0;padding:0;}
 body{background:var(--dark);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;}
-header{background:var(--panel);border-bottom:1px solid var(--border);padding:16px 28px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
-.logo{font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:2px;}
+header{background:var(--panel);border-bottom:1px solid var(--border);padding:14px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
+.logo{font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:2px;}
 .logo span{color:var(--green);}
-.subtitle{font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-top:2px;}
+.subtitle{font-size:10px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-top:1px;}
 .header-right{display:flex;align-items:center;gap:10px;}
-.gw-badge{background:var(--green);color:#000;font-family:'Bebas Neue',sans-serif;font-size:17px;letter-spacing:1px;padding:5px 14px;border-radius:4px;}
-.switch-btn{background:transparent;border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:6px 12px;transition:all 0.15s;display:none;}
+.gw-badge{background:var(--green);color:#000;font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:1px;padding:4px 12px;border-radius:4px;}
+.switch-btn{background:transparent;border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:5px 11px;transition:all 0.15s;display:none;}
 .switch-btn:hover{border-color:var(--green);color:var(--green);}
-.nav-tabs{display:flex;gap:2px;background:var(--panel);border-bottom:1px solid var(--border);padding:0 28px;}
-.nav-tab{font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:1px;padding:12px 20px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;transition:all 0.15s;}
+.nav-tabs{display:flex;background:var(--panel);border-bottom:1px solid var(--border);padding:0 24px;overflow-x:auto;}
+.nav-tab{font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:1px;padding:11px 18px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;transition:all 0.15s;white-space:nowrap;}
 .nav-tab.active{color:var(--green);border-bottom-color:var(--green);}
 .nav-tab:hover{color:var(--text);}
-.tab-content{display:none;}
-.tab-content.active{display:block;}
-.setup{max-width:520px;margin:80px auto;padding:0 24px;text-align:center;}
-.setup h2{font-family:'Bebas Neue',sans-serif;font-size:34px;letter-spacing:2px;margin-bottom:8px;}
-.setup p{color:var(--muted);font-size:14px;line-height:1.7;margin-bottom:28px;}
+.tab-content{display:none;}.tab-content.active{display:block;}
+.setup{max-width:500px;margin:70px auto;padding:0 24px;text-align:center;}
+.setup h2{font-family:'Bebas Neue',sans-serif;font-size:32px;letter-spacing:2px;margin-bottom:8px;}
+.setup p{color:var(--muted);font-size:14px;line-height:1.7;margin-bottom:24px;}
 .input-row{display:flex;gap:10px;}
-input[type="text"]{flex:1;background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'DM Mono',monospace;font-size:15px;padding:12px 16px;outline:none;transition:border-color 0.2s;}
+input[type="text"]{flex:1;background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'DM Mono',monospace;font-size:15px;padding:11px 14px;outline:none;transition:border-color 0.2s;}
 input[type="text"]:focus{border-color:var(--green);}
-.btn{background:var(--green);border:none;border-radius:6px;color:#000;cursor:pointer;font-family:'Bebas Neue',sans-serif;font-size:17px;letter-spacing:1px;padding:12px 22px;transition:background 0.15s,transform 0.1s;white-space:nowrap;}
+.btn{background:var(--green);border:none;border-radius:6px;color:#000;cursor:pointer;font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:1px;padding:11px 20px;transition:background 0.15s,transform 0.1s;white-space:nowrap;}
 .btn:hover{background:var(--green-dark);}
-.hint{margin-top:12px;font-size:12px;color:var(--muted);line-height:1.6;}
-.hint code{background:var(--panel2);border:1px solid var(--border);border-radius:3px;font-family:'DM Mono',monospace;font-size:11px;padding:1px 5px;color:var(--green);}
-.error-box{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:6px;color:#fca5a5;font-size:13px;margin-top:14px;padding:12px 16px;text-align:left;display:none;}
+.hint{margin-top:10px;font-size:11px;color:var(--muted);line-height:1.6;}
+.hint code{background:var(--panel2);border:1px solid var(--border);border-radius:3px;font-family:'DM Mono',monospace;font-size:10px;padding:1px 4px;color:var(--green);}
+.error-box{background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:6px;color:#fca5a5;font-size:13px;margin-top:12px;padding:10px 14px;text-align:left;display:none;}
 .loading{text-align:center;padding:80px 24px;display:none;}
-.spinner{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 20px;}
+.spinner{width:36px;height:36px;border:2px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 16px;}
 @keyframes spin{to{transform:rotate(360deg);}}
+.loading-title{font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:2px;}
+.loading-sub{color:var(--muted);font-size:12px;margin-top:4px;}
 .dashboard{display:none;}
-.page{padding:24px 28px;max-width:1100px;margin:0 auto;}
-.stats-bar{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:24px;}
-.stat-card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:14px 16px;}
-.stat-card .label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;}
-.stat-card .value{font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:1px;}
-.stat-card .value.green{color:var(--green);}
-.stat-card .value.red{color:#ef4444;}
-.stat-card .value.amber{color:#f59e0b;}
-.section-title{font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:2px;color:var(--muted);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border);}
-.pitch-wrap{background:var(--pitch);border-radius:12px;padding:20px 12px;margin-bottom:24px;position:relative;overflow:hidden;}
+.page{padding:20px 24px;max-width:1100px;margin:0 auto;}
+.stats-bar{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-bottom:20px;}
+.stat-card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:12px 14px;}
+.stat-card .label{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:5px;}
+.stat-card .value{font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:1px;}
+.stat-card .value.green{color:var(--green);}.stat-card .value.red{color:#ef4444;}.stat-card .value.amber{color:#f59e0b;}
+.section-title{font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:2px;color:var(--muted);margin-bottom:10px;padding-bottom:7px;border-bottom:1px solid var(--border);}
+
+/* PITCH */
+.pitch-wrap{background:var(--pitch);border-radius:10px;padding:18px 10px;margin-bottom:20px;position:relative;overflow:hidden;}
 .pitch-lines{position:absolute;inset:0;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between;}
-.pitch-line{height:1px;background:rgba(255,255,255,0.05);}
-.pitch-circle{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:90px;height:90px;border:1px solid rgba(255,255,255,0.05);border-radius:50%;pointer-events:none;}
-.pos-row{display:flex;justify-content:center;gap:8px;margin-bottom:14px;position:relative;z-index:1;}
-.pos-label{text-align:center;font-size:9px;color:rgba(255,255,255,0.3);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
-.player{background:rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:7px 5px;width:86px;text-align:center;}
-.player.has-alert{border-color:rgba(239,68,68,0.5);}
+.pitch-line{height:1px;background:rgba(255,255,255,0.04);}
+.pitch-circle{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:80px;height:80px;border:1px solid rgba(255,255,255,0.04);border-radius:50%;pointer-events:none;}
+.pos-row{display:flex;justify-content:center;gap:6px;margin-bottom:12px;position:relative;z-index:1;}
+.pos-label{text-align:center;font-size:8px;color:rgba(255,255,255,0.25);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;}
+.player{background:rgba(0,0,0,0.65);border:1px solid rgba(255,255,255,0.08);border-radius:7px;padding:6px 4px;width:82px;text-align:center;}
 .player.captain{border-color:var(--gk);}
-.player.no-fix{border-color:rgba(255,255,255,0.2);opacity:0.6;}
-.pos-dot{width:5px;height:5px;border-radius:50%;margin:0 auto 4px;}
+.player.has-alert{border-color:rgba(239,68,68,0.5);}
+.player.no-fix{opacity:0.55;border-color:rgba(255,255,255,0.15);}
+.pos-dot{width:5px;height:5px;border-radius:50%;margin:0 auto 3px;}
 .pos-dot.gk{background:var(--gk);}.pos-dot.def{background:var(--def);}.pos-dot.mid{background:var(--mid);}.pos-dot.fwd{background:var(--fwd);}
-.player .pname{font-size:10px;font-weight:500;color:#fff;line-height:1.2;margin-bottom:2px;}
-.player .pclub{font-size:8px;color:rgba(255,255,255,0.4);margin-bottom:2px;}
-.player .pprice{font-family:'DM Mono',monospace;font-size:9px;color:var(--green);}
-.player .pfix{font-size:8px;color:rgba(255,255,255,0.45);margin-top:2px;}
-.cap-badge{font-size:7px;font-weight:600;background:var(--gk);color:#000;border-radius:3px;padding:1px 3px;display:inline-block;margin-top:2px;}
-.inj-badge{font-size:7px;background:#ef4444;color:#fff;border-radius:3px;padding:1px 3px;display:inline-block;margin-top:2px;}
-.nofix-badge{font-size:7px;background:#444;color:#aaa;border-radius:3px;padding:1px 3px;display:inline-block;margin-top:2px;}
-.bench-area{margin-top:6px;border-top:1px dashed rgba(255,255,255,0.08);padding-top:12px;}
-.bench-label{text-align:center;font-size:9px;color:rgba(255,255,255,0.2);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;}
-.chips-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:24px;}
-.chip{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:12px 16px;display:flex;align-items:center;gap:10px;}
-.chip-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
-.chip.available .chip-dot{background:var(--green);}
-.chip.used .chip-dot{background:#333;}
-.chip-name{font-size:13px;font-weight:500;}
-.chip.used .chip-name{color:var(--muted);text-decoration:line-through;}
-.chip-status{font-size:10px;color:var(--muted);margin-top:1px;}
-.chip.available .chip-status{color:var(--green);}
-.squad-table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:24px;}
-.squad-table th{text-align:left;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;padding:8px 10px;border-bottom:1px solid var(--border);font-weight:500;}
-.squad-table td{padding:9px 10px;border-bottom:1px solid rgba(255,255,255,0.04);vertical-align:middle;}
-.squad-table tr.bench-row td{opacity:0.5;}
-.pos-pill{font-size:9px;font-weight:600;padding:2px 6px;border-radius:3px;display:inline-block;}
-.pos-pill.gk{background:rgba(245,158,11,0.15);color:var(--gk);}
-.pos-pill.def{background:rgba(59,130,246,0.15);color:var(--def);}
-.pos-pill.mid{background:rgba(16,185,129,0.15);color:var(--mid);}
-.pos-pill.fwd{background:rgba(239,68,68,0.15);color:var(--fwd);}
-.fdr-cell{display:flex;gap:3px;}
-.fdr-box{width:24px;height:22px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#000;}
-.fdr-1{background:#00c96a;}.fdr-2{background:#a3e635;}.fdr-3{background:#facc15;color:#333;}.fdr-4{background:#fb923c;}.fdr-5{background:#ef4444;}
-.fdr-blank{background:#222;color:#555;}
-.form-val{font-family:'DM Mono',monospace;font-size:12px;}
-.form-val.hot{color:var(--green);}.form-val.warm{color:#facc15;}.form-val.cold{color:#ef4444;}
-.status-ok{color:var(--green);font-size:11px;}
-.status-doubt{color:#facc15;font-size:11px;}
-.status-out{color:#ef4444;font-size:11px;}
-.strategy-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;}
-.strategy-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:18px;}
-.strategy-card h3{font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:1px;color:var(--muted);margin-bottom:14px;}
-.alert-row{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);}
+.player .pname{font-size:9px;font-weight:500;color:#fff;line-height:1.2;margin-bottom:2px;}
+.player .pprice{font-family:'DM Mono',monospace;font-size:8px;color:var(--green);}
+.player .pfix{font-size:7px;color:rgba(255,255,255,0.4);margin-top:1px;}
+.cap-badge{font-size:6px;font-weight:700;background:var(--gk);color:#000;border-radius:2px;padding:1px 3px;display:inline-block;margin-top:1px;}
+.inj-badge{font-size:6px;background:#ef4444;color:#fff;border-radius:2px;padding:1px 3px;display:inline-block;margin-top:1px;}
+.blk-badge{font-size:6px;background:#333;color:#888;border-radius:2px;padding:1px 3px;display:inline-block;margin-top:1px;}
+.bench-area{margin-top:6px;border-top:1px dashed rgba(255,255,255,0.07);padding-top:10px;}
+.bench-label{text-align:center;font-size:8px;color:rgba(255,255,255,0.18);letter-spacing:2px;text-transform:uppercase;margin-bottom:7px;}
+
+/* CHIPS */
+.chips-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:20px;}
+.chip{background:var(--panel);border:1px solid var(--border);border-radius:7px;padding:10px 14px;display:flex;align-items:center;gap:9px;}
+.chip-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.chip.available .chip-dot{background:var(--green);}.chip.used .chip-dot{background:#2a2a2a;}
+.chip-name{font-size:12px;font-weight:500;}.chip.used .chip-name{color:var(--muted);text-decoration:line-through;}
+.chip-status{font-size:9px;color:var(--muted);margin-top:1px;}.chip.available .chip-status{color:var(--green);}
+
+/* PLAYER CARDS — Squad view */
+.squad-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;margin-bottom:20px;}
+.squad-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;position:relative;overflow:hidden;}
+.squad-card.bench-card{opacity:0.65;border-style:dashed;}
+.squad-card-header{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+.squad-card-pos{width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;}
+.squad-card-pos.gk{background:rgba(245,158,11,0.15);color:var(--gk);}
+.squad-card-pos.def{background:rgba(59,130,246,0.15);color:var(--def);}
+.squad-card-pos.mid{background:rgba(16,185,129,0.15);color:var(--mid);}
+.squad-card-pos.fwd{background:rgba(239,68,68,0.15);color:var(--fwd);}
+.squad-card-info{flex:1;}
+.squad-card-name{font-size:14px;font-weight:500;color:var(--text);}
+.squad-card-meta{font-size:11px;color:var(--muted);margin-top:1px;}
+.squad-card-price{font-family:'DM Mono',monospace;font-size:12px;color:var(--green);margin-left:auto;flex-shrink:0;}
+.form-graph-wrap{margin-bottom:10px;position:relative;height:50px;}
+.gw-fixtures{display:flex;gap:4px;margin-bottom:8px;}
+.gw-fix-box{flex:1;border-radius:5px;padding:5px 4px;text-align:center;}
+.gw-fix-label{font-size:8px;color:rgba(255,255,255,0.35);margin-bottom:2px;font-weight:500;}
+.gw-fix-opp{font-size:10px;font-weight:600;color:#fff;}
+.gw-fix-venue{font-size:8px;margin-top:1px;}
+.gw-fix-diff{font-size:8px;margin-top:2px;font-weight:700;}
+.fdr-bg-1{background:rgba(0,201,106,0.18);border:1px solid rgba(0,201,106,0.3);}
+.fdr-bg-2{background:rgba(163,230,53,0.12);border:1px solid rgba(163,230,53,0.25);}
+.fdr-bg-3{background:rgba(250,204,21,0.1);border:1px solid rgba(250,204,21,0.2);}
+.fdr-bg-4{background:rgba(251,146,60,0.12);border:1px solid rgba(251,146,60,0.25);}
+.fdr-bg-5{background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.25);}
+.fdr-bg-blank{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);}
+.fdr-txt-1{color:#00c96a;}.fdr-txt-2{color:#a3e635;}.fdr-txt-3{color:#facc15;}.fdr-txt-4{color:#fb923c;}.fdr-txt-5{color:#ef4444;}.fdr-txt-blank{color:#444;}
+.squad-card-score{display:flex;align-items:center;gap:6px;margin-top:6px;padding-top:8px;border-top:1px solid var(--border);}
+.score-label{font-size:10px;color:var(--muted);}
+.score-bar-wrap{flex:1;height:4px;background:#222;border-radius:2px;overflow:hidden;}
+.score-bar{height:100%;border-radius:2px;transition:width 0.3s;}
+.score-val{font-family:'DM Mono',monospace;font-size:11px;font-weight:500;}
+.score-val.excellent{color:var(--green);}.score-val.good{color:#a3e635;}.score-val.average{color:#facc15;}.score-val.poor{color:#ef4444;}
+.inj-strip{background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:4px;padding:4px 8px;font-size:10px;color:#fca5a5;margin-top:6px;}
+.cap-strip{background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:4px;padding:4px 8px;font-size:10px;color:#fde68a;margin-top:6px;}
+
+/* STRATEGY */
+.strategy-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px;}
+.strategy-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;}
+.strategy-card h3{font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:1px;color:var(--muted);margin-bottom:12px;}
+.alert-row{display:flex;align-items:flex-start;gap:9px;padding:7px 0;border-bottom:1px solid var(--border);}
 .alert-row:last-child{border-bottom:none;}
-.alert-icon{font-size:14px;flex-shrink:0;margin-top:1px;}
-.alert-text{font-size:13px;line-height:1.5;}
-.chip-rec{background:var(--panel2);border-radius:6px;padding:10px 12px;margin-bottom:8px;}
-.chip-rec-name{font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:1px;color:var(--green);margin-bottom:3px;}
-.chip-rec-text{font-size:12px;color:var(--muted);line-height:1.5;}
-.transfer-rec{background:var(--panel2);border-radius:6px;padding:10px 12px;margin-bottom:8px;}
-.fixture-table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:24px;}
-.fixture-table th{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;padding:6px 8px;border-bottom:1px solid var(--border);text-align:center;font-weight:500;}
+.alert-icon{font-size:13px;flex-shrink:0;margin-top:1px;}
+.alert-text{font-size:12px;line-height:1.5;}
+.chip-rec{background:var(--panel2);border-radius:5px;padding:9px 11px;margin-bottom:7px;}
+.chip-rec-name{font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:1px;color:var(--green);margin-bottom:2px;}
+.chip-rec-text{font-size:11px;color:var(--muted);line-height:1.5;}
+.transfer-rec{background:var(--panel2);border-radius:5px;padding:9px 11px;margin-bottom:7px;}
+
+/* FIXTURES TABLE */
+.fdr-box{width:26px;height:22px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#000;}
+.fdr-1{background:#00c96a;}.fdr-2{background:#a3e635;}.fdr-3{background:#facc15;color:#333;}.fdr-4{background:#fb923c;}.fdr-5{background:#ef4444;}
+.fdr-blank{background:#1a1a1a;color:#444;}
+.fix-cell{display:flex;flex-direction:column;align-items:center;gap:2px;}
+.fix-opp{font-size:9px;color:var(--muted);}
+.fixture-table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:20px;}
+.fixture-table th{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;padding:6px 8px;border-bottom:1px solid var(--border);text-align:center;font-weight:500;}
 .fixture-table th:first-child{text-align:left;}
-.fixture-table td{padding:7px 8px;border-bottom:1px solid rgba(255,255,255,0.03);text-align:center;}
-.fixture-table td:first-child{text-align:left;font-weight:500;}
-.copy-section{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:18px;margin-bottom:24px;}
-.copy-section h3{font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:1px;margin-bottom:6px;}
-.copy-section p{font-size:12px;color:var(--muted);margin-bottom:12px;}
-.copy-box{background:var(--dark);border:1px solid var(--border);border-radius:6px;padding:12px;font-family:'DM Mono',monospace;font-size:11px;color:var(--green);line-height:1.8;white-space:pre-wrap;word-break:break-word;max-height:300px;overflow-y:auto;margin-bottom:10px;}
-.copy-btn{background:transparent;border:1px solid var(--green);border-radius:6px;color:var(--green);cursor:pointer;font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:1px;padding:7px 18px;transition:background 0.15s;}
-.copy-btn:hover{background:rgba(0,255,135,0.1);}
-.refresh-btn{background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:7px 14px;margin-left:8px;transition:all 0.15s;}
+.fixture-table td{padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.03);text-align:center;vertical-align:middle;}
+.fixture-table td:first-child{text-align:left;font-weight:500;font-size:12px;}
+
+/* SNAPSHOT */
+.copy-section{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:20px;}
+.copy-section h3{font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:1px;margin-bottom:5px;}
+.copy-section p{font-size:11px;color:var(--muted);margin-bottom:10px;}
+.copy-box{background:var(--dark);border:1px solid var(--border);border-radius:5px;padding:10px;font-family:'DM Mono',monospace;font-size:10px;color:var(--green);line-height:1.8;white-space:pre-wrap;word-break:break-word;max-height:280px;overflow-y:auto;margin-bottom:8px;}
+.copy-btn{background:transparent;border:1px solid var(--green);border-radius:5px;color:var(--green);cursor:pointer;font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:1px;padding:6px 16px;transition:background 0.15s;}
+.copy-btn:hover{background:rgba(0,255,135,0.08);}
+.refresh-btn{background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--muted);cursor:pointer;font-size:11px;padding:6px 12px;margin-left:7px;transition:all 0.15s;}
 .refresh-btn:hover{border-color:var(--green);color:var(--green);}
-@media(max-width:700px){.strategy-grid{grid-template-columns:1fr;}.player{width:66px;}.player .pname{font-size:9px;}.pos-row{gap:4px;}.page{padding:14px;}}
+@media(max-width:600px){.strategy-grid{grid-template-columns:1fr;}.player{width:64px;}.pos-row{gap:3px;}.page{padding:12px 14px;}.squad-cards{grid-template-columns:1fr;}}
 </style>
 </head>
 <body>
@@ -129,16 +159,16 @@ input[type="text"]:focus{border-color:var(--green);}
     <div class="subtitle">Strategy Dashboard</div>
   </div>
   <div class="header-right">
-    <button class="switch-btn" id="switch-btn" onclick="switchTeam()">⇄ Switch Team</button>
+    <button class="switch-btn" id="switch-btn" onclick="switchTeam()">⇄ Switch</button>
     <div class="gw-badge" id="gw-badge">GW —</div>
   </div>
 </header>
 
 <div class="setup" id="setup-panel">
   <h2>Connect Your <span style="color:var(--green)">Team</span></h2>
-  <p>Enter your FPL Team ID below. Find it in the URL when viewing your team:<br><code>fantasy.premierleague.com/entry/<strong>XXXXXXX</strong>/event/...</code></p>
+  <p>Enter your FPL Team ID. Find it in the URL:<br><code>fantasy.premierleague.com/entry/<strong>XXXXXXX</strong>/event/...</code></p>
   <div class="input-row">
-    <input type="text" id="team-id-input" placeholder="e.g. 1234567" />
+    <input type="text" id="team-id-input" placeholder="Team ID e.g. 1234567" />
     <button class="btn" onclick="loadTeam()">LOAD</button>
   </div>
   <div class="hint">Public data — no login required.</div>
@@ -147,53 +177,75 @@ input[type="text"]:focus{border-color:var(--green);}
 
 <div class="loading" id="loading-panel">
   <div class="spinner"></div>
-  <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:2px;">Loading squad data...</div>
-  <div style="color:var(--muted);font-size:12px;margin-top:6px;" id="loading-msg">Connecting to FPL API</div>
+  <div class="loading-title">Loading squad data...</div>
+  <div class="loading-sub" id="loading-msg">Connecting to FPL API</div>
 </div>
 
 <div class="dashboard" id="dashboard">
   <div class="nav-tabs">
-    <div class="nav-tab active" data-tab="squad" onclick="showTab(this,'squad')">Squad</div>
-    <div class="nav-tab" data-tab="strategy" onclick="showTab(this,'strategy')">Strategy</div>
-    <div class="nav-tab" data-tab="fixtures" onclick="showTab(this,'fixtures')">Fixtures</div>
-    <div class="nav-tab" data-tab="snapshot" onclick="showTab(this,'snapshot')">Snapshot</div>
+    <div class="nav-tab active" onclick="showTab(this,'squad')">Squad</div>
+    <div class="nav-tab" onclick="showTab(this,'players')">Players &amp; Form</div>
+    <div class="nav-tab" onclick="showTab(this,'strategy')">Strategy</div>
+    <div class="nav-tab" onclick="showTab(this,'fixtures')">Fixtures</div>
+    <div class="nav-tab" onclick="showTab(this,'snapshot')">Snapshot</div>
   </div>
 
+  <!-- SQUAD TAB -->
   <div class="tab-content active" id="tab-squad">
     <div class="page">
       <div class="stats-bar" id="stats-bar"></div>
       <div class="section-title">Starting XI</div>
-      <div class="pitch-wrap" id="pitch">
+      <div class="pitch-wrap">
         <div class="pitch-lines"><div class="pitch-line"></div><div class="pitch-line"></div><div class="pitch-line"></div><div class="pitch-line"></div></div>
         <div class="pitch-circle"></div>
         <div id="pitch-content"></div>
       </div>
-      <div class="section-title">Full Squad</div>
-      <table class="squad-table" id="squad-table"></table>
       <div class="section-title">Chips</div>
       <div class="chips-grid" id="chips-grid"></div>
     </div>
   </div>
 
-  <div class="tab-content" id="tab-strategy">
+  <!-- PLAYERS & FORM TAB -->
+  <div class="tab-content" id="tab-players">
     <div class="page">
-      <div class="section-title">GW Strategy</div>
-      <div class="strategy-grid" id="strategy-grid"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <div class="section-title" style="margin:0;border:none;padding:0;">Player Cards — Form &amp; Next 3 GWs</div>
+        <div style="display:flex;gap:6px;">
+          <button onclick="filterCards('all')" id="filter-all" class="btn" style="font-size:11px;padding:5px 12px;background:var(--green);">All</button>
+          <button onclick="filterCards('xi')" id="filter-xi" class="btn" style="font-size:11px;padding:5px 12px;background:transparent;border:1px solid var(--border);color:var(--muted);">XI Only</button>
+          <button onclick="filterCards('bench')" id="filter-bench" class="btn" style="font-size:11px;padding:5px 12px;background:transparent;border:1px solid var(--border);color:var(--muted);">Bench</button>
+        </div>
+      </div>
+      <div class="squad-cards" id="squad-cards"></div>
     </div>
   </div>
 
+  <!-- STRATEGY TAB -->
+  <div class="tab-content" id="tab-strategy">
+    <div class="page">
+      <div class="section-title">GW Strategy &amp; Recommendations</div>
+      <div class="strategy-grid" id="strategy-grid"></div>
+      <div class="section-title">Captain Recommendation — Next 3 GWs</div>
+      <div id="captain-rec" style="margin-bottom:20px;"></div>
+      <div class="section-title">Transfer Recommendations</div>
+      <div id="transfer-recs" style="margin-bottom:20px;"></div>
+    </div>
+  </div>
+
+  <!-- FIXTURES TAB -->
   <div class="tab-content" id="tab-fixtures">
     <div class="page">
-      <div class="section-title">Fixture Difficulty — Next 6 GWs (Your Squad Teams)</div>
+      <div class="section-title">Fixture Difficulty — Next 6 GWs</div>
       <table class="fixture-table" id="fixture-table"></table>
     </div>
   </div>
 
+  <!-- SNAPSHOT TAB -->
   <div class="tab-content" id="tab-snapshot">
     <div class="page">
       <div class="copy-section">
         <h3>Claude Snapshot</h3>
-        <p>Copy this and paste into Claude each gameweek for full strategy decisions.</p>
+        <p>Paste this into Claude each gameweek for full AI strategy decisions.</p>
         <div class="copy-box" id="copy-box">Loading...</div>
         <button class="copy-btn" onclick="copySnapshot()">COPY SNAPSHOT</button>
         <button class="refresh-btn" onclick="refreshData()">↻ Refresh</button>
@@ -204,7 +256,12 @@ input[type="text"]:focus{border-color:var(--green);}
 
 <script>
 const PROXY='/api/fpl?path=';
-let bootstrapData=null,teamId=null,currentGW=null,snapshotText='',allFixtures=[];
+let bootstrapData=null,teamId=null,currentGW=null,snapshotText='',allFixtures=[],playerHistories={},picksData=null,allChipDefs=[
+  {key:'wildcard',label:'Wildcard'},
+  {key:'freehit',label:'Free Hit'},
+  {key:'bboost',label:'Bench Boost'},
+  {key:'3xc',label:'Triple Captain'}
+];
 
 function showTab(el,name){
   document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
@@ -217,18 +274,16 @@ function hideError(){document.getElementById('error-box').style.display='none';}
 function setLoading(msg){document.getElementById('loading-msg').textContent=msg;}
 
 async function fetchFPL(path){
-  const url=PROXY+encodeURIComponent(path);
-  const res=await fetch(url);
+  const res=await fetch(PROXY+encodeURIComponent(path));
   if(!res.ok)throw new Error('HTTP '+res.status);
-  const text=await res.text();
-  return JSON.parse(text);
+  return JSON.parse(await res.text());
 }
 
 async function loadTeam(){
   hideError();
-  const input=document.getElementById('team-id-input').value.trim();
-  if(!input||isNaN(input)){showError('Please enter a valid numeric Team ID.');return;}
-  teamId=parseInt(input);
+  const v=document.getElementById('team-id-input').value.trim();
+  if(!v||isNaN(v)){showError('Please enter a valid numeric Team ID.');return;}
+  teamId=parseInt(v);
   localStorage.setItem('fpl_team_id',teamId);
   await fetchAndRender();
 }
@@ -243,74 +298,102 @@ async function fetchAndRender(){
   try{
     setLoading('Fetching league data...');
     bootstrapData=await fetchFPL('/bootstrap-static/');
-    const events=bootstrapData.events;
-    const liveGW=events.find(e=>e.is_current)||events.find(e=>e.is_next);
-    currentGW=liveGW?liveGW.id:events.length;
+    const liveGW=bootstrapData.events.find(e=>e.is_current)||bootstrapData.events.find(e=>e.is_next);
+    currentGW=liveGW?liveGW.id:38;
     document.getElementById('gw-badge').textContent='GW '+currentGW;
+
     setLoading('Fetching your squad...');
-    const [entryData,picksData,transfersData,historyData]=await Promise.all([
+    const [entry,picks,transfers,history]=await Promise.all([
       fetchFPL('/entry/'+teamId+'/'),
       fetchFPL('/entry/'+teamId+'/event/'+currentGW+'/picks/'),
       fetchFPL('/entry/'+teamId+'/transfers/'),
       fetchFPL('/entry/'+teamId+'/history/')
     ]);
-    setLoading('Fetching fixtures...');
+    picksData=picks;
+
+    setLoading('Fetching fixtures & form data...');
     allFixtures=await fetchFPL('/fixtures/');
+
+    // Fetch player history for all squad members
+    setLoading('Loading player form histories...');
+    const playerIds=picks.picks.map(p=>p.element);
+    const histPromises=playerIds.map(id=>
+      fetchFPL('/element-summary/'+id+'/').then(d=>{playerHistories[id]=d;}).catch(()=>{})
+    );
+    await Promise.all(histPromises);
+
     const gwFixtures=allFixtures.filter(f=>f.event===currentGW);
-    renderDashboard(entryData,picksData,transfersData,historyData,gwFixtures);
+    renderAll(entry,picks,transfers,history,gwFixtures);
   }catch(err){
     document.getElementById('loading-panel').style.display='none';
     document.getElementById('setup-panel').style.display='block';
-    showError('Could not load team data. Check your Team ID and try again. ('+err.message+')');
+    showError('Could not load data. Check Team ID and try again. ('+err.message+')');
   }
 }
 
-function getPlayerById(id){return bootstrapData.elements.find(e=>e.id===id);}
-function getTeamById(id){return bootstrapData.teams.find(t=>t.id===id);}
-function posLabel(et){return['','GK','DEF','MID','FWD'][et]||'?';}
-function posClass(et){return['','gk','def','mid','fwd'][et]||'';}
+const getPlayer=id=>bootstrapData.elements.find(e=>e.id===id);
+const getTeam=id=>bootstrapData.teams.find(t=>t.id===id);
+const posLabel=et=>['','GK','DEF','MID','FWD'][et]||'?';
+const posClass=et=>['','gk','def','mid','fwd'][et]||'';
+const formClass=v=>{const f=parseFloat(v)||0;return f>=7?'excellent':f>=4?'good':f>=2?'average':'poor';};
 
 function getPlayerFixtures(tid,gwStart,count){
-  const fixes=[];
+  const out=[];
   for(let gw=gwStart;gw<gwStart+count;gw++){
-    const gwFixes=allFixtures.filter(f=>f.event===gw&&(f.team_h===tid||f.team_a===tid));
-    if(!gwFixes.length){fixes.push(null);continue;}
-    gwFixes.forEach(f=>{
-      const isHome=f.team_h===tid;
-      const opp=isHome?getTeamById(f.team_a):getTeamById(f.team_h);
-      const diff=isHome?f.team_h_difficulty:f.team_a_difficulty;
-      fixes.push({opp:opp?opp.short_name:'?',home:isHome,diff:diff});
+    const fx=allFixtures.filter(f=>f.event===gw&&(f.team_h===tid||f.team_a===tid));
+    if(!fx.length){out.push(null);continue;}
+    fx.forEach(f=>{
+      const home=f.team_h===tid;
+      const opp=home?getTeam(f.team_a):getTeam(f.team_h);
+      out.push({opp:opp?opp.short_name:'?',home,diff:home?f.team_h_difficulty:f.team_a_difficulty,gwId:gw});
     });
   }
-  return fixes;
+  return out;
 }
 
-function fdrBox(fix){
-  if(!fix)return '<div class="fdr-box fdr-blank">—</div>';
-  return '<div class="fdr-box fdr-'+fix.diff+'" title="'+fix.opp+' '+(fix.home?'H':'A')+'">'+fix.diff+'</div>';
+function getFixStr(tid,fixtures){
+  const f=fixtures.find(x=>x.team_h===tid||x.team_a===tid);
+  if(!f)return null;
+  const home=f.team_h===tid;
+  const opp=home?getTeam(f.team_a):getTeam(f.team_h);
+  return(opp?opp.short_name:'?')+' ('+(home?'H':'A')+')';
 }
 
-function getFixtureStr(tid,fixtures){
-  const fix=fixtures.find(f=>f.team_h===tid||f.team_a===tid);
-  if(!fix)return null;
-  const isHome=fix.team_h===tid;
-  const opp=isHome?getTeamById(fix.team_a):getTeamById(fix.team_h);
-  return (opp?opp.short_name:'?')+' ('+(isHome?'H':'A')+')';
+function fdrBox(fix,showOpp){
+  if(!fix)return `<div class="fdr-box fdr-blank">—</div>`;
+  let h=`<div class="fdr-box fdr-${fix.diff}" title="${fix.opp} ${fix.home?'H':'A'}">${fix.diff}</div>`;
+  if(showOpp)h=`<div class="fix-cell">${h}<div class="fix-opp">${fix.opp}${fix.home?' H':' A'}</div></div>`;
+  return h;
 }
 
-function formClass(val){const f=parseFloat(val)||0;if(f>=6)return'hot';if(f>=3)return'warm';return'cold';}
+// Compute a player score for a given number of upcoming GWs
+function playerScore(pl,gwStart,gwCount){
+  const form=parseFloat(pl.form)||0;
+  const fixes=getPlayerFixtures(pl.team,gwStart,gwCount);
+  const validFixes=fixes.filter(Boolean);
+  const avgFdr=validFixes.length?validFixes.reduce((a,f)=>a+f.diff,0)/validFixes.length:3;
+  const fixtureBonus=(5-avgFdr)*1.5;
+  const doubleBonus=validFixes.length>gwCount?2:0;
+  const score=form+fixtureBonus+doubleBonus;
+  return{score,form,avgFdr:avgFdr.toFixed(1),fixes,validFixes};
+}
+
+// Get last N GW points from player history
+function getRecentPoints(playerId,n){
+  const hist=playerHistories[playerId];
+  if(!hist||!hist.history)return[];
+  return hist.history.slice(-n).map(h=>h.total_points);
+}
 
 function statusBadge(pl){
-  const s=pl.status;
-  if(s==='a')return '<span class="status-ok">✓ Avail</span>';
-  if(s==='d')return '<span class="status-doubt">⚠ Doubt</span>';
-  if(s==='i')return '<span class="status-out">✕ Injured</span>';
-  if(s==='s')return '<span class="status-out">✕ Susp</span>';
-  if(s==='u')return '<span class="status-out">✕ Unavail</span>';
-  return '<span class="status-doubt">'+s+'</span>';
+  if(pl.status==='a')return'<span style="color:var(--green);font-size:10px">✓</span>';
+  if(pl.status==='d')return'<span style="color:#facc15;font-size:10px">⚠</span>';
+  if(pl.status==='i')return'<span style="color:#ef4444;font-size:10px">✕</span>';
+  if(pl.status==='s')return'<span style="color:#ef4444;font-size:10px">S</span>';
+  return'';
 }
 
-function renderDashboard(entry,picks,transfers,history,gwFixtures){
+function renderAll(entry,picks,transfers,history,gwFixtures){
   const bank=picks.entry_history.bank/10;
   const teamValue=picks.entry_history.value/10;
   const totalPoints=entry.summary_overall_points;
@@ -320,218 +403,333 @@ function renderDashboard(entry,picks,transfers,history,gwFixtures){
   const teamName=entry.name;
   const gwsLeft=38-currentGW;
 
-  // CHIPS — correctly from history endpoint
+  // Chips from history endpoint
   const usedChipsRaw=history.chips||[];
   const usedChipNames=usedChipsRaw.map(c=>c.name);
-  const allChipDefs=[
-    {key:'wildcard',label:'Wildcard'},
-    {key:'freehit',label:'Free Hit'},
-    {key:'bboost',label:'Bench Boost'},
-    {key:'3xc',label:'Triple Captain'}
-  ];
 
-  // Stats
+  // Stats bar
   document.getElementById('stats-bar').innerHTML=`
-    <div class="stat-card"><div class="label">Team</div><div class="value" style="font-size:13px;font-family:'DM Sans';font-weight:500;line-height:1.3;">${teamName}</div></div>
-    <div class="stat-card"><div class="label">GW${currentGW} Pts</div><div class="value green">${gwPoints}</div></div>
-    <div class="stat-card"><div class="label">Total Pts</div><div class="value">${totalPoints}</div></div>
-    <div class="stat-card"><div class="label">Overall Rank</div><div class="value amber">${rank}</div></div>
+    <div class="stat-card"><div class="label">Team</div><div class="value" style="font-size:12px;font-family:'DM Sans';font-weight:600;line-height:1.3;">${teamName}</div></div>
+    <div class="stat-card"><div class="label">GW${currentGW}</div><div class="value green">${gwPoints}</div></div>
+    <div class="stat-card"><div class="label">Total</div><div class="value">${totalPoints}</div></div>
+    <div class="stat-card"><div class="label">Rank</div><div class="value amber" style="font-size:16px;">${rank}</div></div>
     <div class="stat-card"><div class="label">Bank</div><div class="value ${bank<0?'red':'green'}">£${bank.toFixed(1)}m</div></div>
-    <div class="stat-card"><div class="label">Squad Value</div><div class="value">£${teamValue.toFixed(1)}m</div></div>
+    <div class="stat-card"><div class="label">Value</div><div class="value">£${teamValue.toFixed(1)}m</div></div>
     <div class="stat-card"><div class="label">GWs Left</div><div class="value">${gwsLeft}</div></div>
   `;
 
   // Pitch
-  const startingPicks=picks.picks.filter(p=>p.position<=11);
-  const benchPicks=picks.picks.filter(p=>p.position>11);
+  const starters=picks.picks.filter(p=>p.position<=11);
+  const bench=picks.picks.filter(p=>p.position>11);
 
-  function makePlayerCard(pick){
-    const pl=getPlayerById(pick.element);
-    if(!pl)return '<div class="player"><div class="pname">?</div></div>';
-    const team=getTeamById(pl.team);
-    const fix=getFixtureStr(pl.team,gwFixtures);
+  function pitchCard(pick){
+    const pl=getPlayer(pick.element);
+    if(!pl)return'<div class="player"><div class="pname">?</div></div>';
+    const team=getTeam(pl.team);
+    const fix=getFixStr(pl.team,gwFixtures);
     const price=(pl.now_cost/10).toFixed(1);
-    const pos=posClass(pl.element_type);
-    const isInj=pl.status!=='a';
-    const noFix=!fix;
-    return `<div class="player ${pick.is_captain?'captain':''} ${isInj?'has-alert':''} ${noFix?'no-fix':''}">
-      <div class="pos-dot ${pos}"></div>
+    return`<div class="player ${pick.is_captain?'captain':''} ${pl.status!=='a'?'has-alert':''} ${!fix?'no-fix':''}">
+      <div class="pos-dot ${posClass(pl.element_type)}"></div>
       <div class="pname">${pl.web_name}</div>
-      <div class="pclub">${team?team.short_name:''}</div>
       <div class="pprice">£${price}m</div>
-      <div class="pfix">${fix||'No fix'}</div>
+      <div class="pfix">${fix||'No fixture'}</div>
       ${pick.is_captain?'<span class="cap-badge">©</span>':''}
-      ${isInj?'<span class="inj-badge">!</span>':''}
-      ${noFix&&!isInj?'<span class="nofix-badge">BLK</span>':''}
+      ${pl.status!=='a'?'<span class="inj-badge">!</span>':''}
+      ${!fix&&pl.status==='a'?'<span class="blk-badge">BLK</span>':''}
     </div>`;
   }
 
-  const gks=startingPicks.filter(p=>getPlayerById(p.element)?.element_type===1);
-  const defs=startingPicks.filter(p=>getPlayerById(p.element)?.element_type===2);
-  const mids=startingPicks.filter(p=>getPlayerById(p.element)?.element_type===3);
-  const fwds=startingPicks.filter(p=>getPlayerById(p.element)?.element_type===4);
+  const gks=starters.filter(p=>getPlayer(p.element)?.element_type===1);
+  const defs=starters.filter(p=>getPlayer(p.element)?.element_type===2);
+  const mids=starters.filter(p=>getPlayer(p.element)?.element_type===3);
+  const fwds=starters.filter(p=>getPlayer(p.element)?.element_type===4);
 
   document.getElementById('pitch-content').innerHTML=`
-    <div class="pos-label">Goalkeeper</div><div class="pos-row">${gks.map(makePlayerCard).join('')}</div>
-    <div class="pos-label">Defenders</div><div class="pos-row">${defs.map(makePlayerCard).join('')}</div>
-    <div class="pos-label">Midfielders</div><div class="pos-row">${mids.map(makePlayerCard).join('')}</div>
-    <div class="pos-label">Forwards</div><div class="pos-row">${fwds.map(makePlayerCard).join('')}</div>
-    <div class="bench-area"><div class="bench-label">Bench</div><div class="pos-row">${benchPicks.map(makePlayerCard).join('')}</div></div>
-  `;
-
-  // Squad table
-  const tableRows=picks.picks.map(pick=>{
-    const pl=getPlayerById(pick.element);
-    if(!pl)return '';
-    const team=getTeamById(pl.team);
-    const price=(pl.now_cost/10).toFixed(1);
-    const pos=posClass(pl.element_type);
-    const isBench=pick.position>11;
-    const fixes=getPlayerFixtures(pl.team,currentGW,5);
-    const cap=pick.is_captain?' ©':pick.is_vice_captain?' (v)':'';
-    const news=pl.news?`<div style="font-size:10px;color:#facc15;margin-top:2px">${pl.news.substring(0,50)}</div>`:'';
-    return `<tr class="${isBench?'bench-row':''}">
-      <td><span class="pos-pill ${pos}">${posLabel(pl.element_type)}</span></td>
-      <td style="font-weight:500">${pl.web_name}${cap}</td>
-      <td style="color:var(--muted);font-size:11px">${team?team.short_name:''}</td>
-      <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--green)">£${price}m</td>
-      <td><span class="form-val ${formClass(pl.form)}">${parseFloat(pl.form).toFixed(1)}</span></td>
-      <td style="font-size:11px;color:var(--muted)">${pl.total_points}pts</td>
-      <td>${statusBadge(pl)}${news}</td>
-      <td><div class="fdr-cell">${fixes.map(fdrBox).join('')}</div></td>
-    </tr>`;
-  }).join('');
-
-  document.getElementById('squad-table').innerHTML=`
-    <thead><tr>
-      <th>Pos</th><th>Player</th><th>Club</th><th>Price</th><th>Form</th><th>Season</th><th>Status / News</th><th>Next 5 GWs</th>
-    </tr></thead>
-    <tbody>${tableRows}</tbody>
+    <div class="pos-label">Goalkeeper</div><div class="pos-row">${gks.map(pitchCard).join('')}</div>
+    <div class="pos-label">Defenders</div><div class="pos-row">${defs.map(pitchCard).join('')}</div>
+    <div class="pos-label">Midfielders</div><div class="pos-row">${mids.map(pitchCard).join('')}</div>
+    <div class="pos-label">Forwards</div><div class="pos-row">${fwds.map(pitchCard).join('')}</div>
+    <div class="bench-area"><div class="bench-label">Bench</div><div class="pos-row">${bench.map(pitchCard).join('')}</div></div>
   `;
 
   // Chips
   document.getElementById('chips-grid').innerHTML=allChipDefs.map(c=>{
     const used=usedChipNames.includes(c.key);
-    const usedGW=used?usedChipsRaw.find(u=>u.name===c.key)?.event:null;
-    return `<div class="chip ${used?'used':'available'}">
+    const gw=used?usedChipsRaw.find(u=>u.name===c.key)?.event:null;
+    return`<div class="chip ${used?'used':'available'}">
       <div class="chip-dot"></div>
-      <div><div class="chip-name">${c.label}</div><div class="chip-status">${used?'Used GW'+usedGW:'Available'}</div></div>
+      <div><div class="chip-name">${c.label}</div><div class="chip-status">${used?'Used GW'+gw:'Available'}</div></div>
     </div>`;
   }).join('');
 
-  // Strategy
+  // === PLAYER CARDS (Players & Form tab) ===
+  const chartIds=[];
+  const cardHtml=picks.picks.map((pick,idx)=>{
+    const pl=getPlayer(pick.element);
+    if(!pl)return'';
+    const team=getTeam(pl.team);
+    const isBench=pick.position>11;
+    const price=(pl.now_cost/10).toFixed(1);
+    const pos=posClass(pl.element_type);
+    const recentPts=getRecentPoints(pick.element,5);
+    const fixes3=getPlayerFixtures(pl.team,currentGW,3);
+    const {score,form,avgFdr}=playerScore(pl,currentGW,3);
+    const scoreClass=formClass(score/2);
+    const chartId='chart-'+pick.element+'-'+idx;
+    chartIds.push({id:chartId,pts:recentPts,playerId:pick.element});
+    const cap=pick.is_captain?' <span style="background:var(--gk);color:#000;font-size:9px;padding:1px 4px;border-radius:2px;font-weight:700">©</span>':'';
+    const vice=pick.is_vice_captain?' <span style="background:#555;color:#fff;font-size:9px;padding:1px 4px;border-radius:2px;">v</span>':'';
+
+    // FDR boxes for next 3 GWs
+    const fdrBoxes=Array.from({length:3},(_,i)=>{
+      const gwId=currentGW+i;
+      const gwFixes=fixes3.filter(f=>f&&f.gwId===gwId);
+      if(!gwFixes.length){
+        return`<div class="gw-fix-box fdr-bg-blank" style="opacity:0.5">
+          <div class="gw-fix-label">GW${gwId}</div>
+          <div class="gw-fix-opp fdr-txt-blank">—</div>
+          <div class="gw-fix-venue fdr-txt-blank">Blank</div>
+        </div>`;
+      }
+      return gwFixes.map(f=>`<div class="gw-fix-box fdr-bg-${f.diff}">
+        <div class="gw-fix-label">GW${f.gwId}</div>
+        <div class="gw-fix-opp fdr-txt-${f.diff}">${f.opp}</div>
+        <div class="gw-fix-venue fdr-txt-${f.diff}">${f.home?'Home':'Away'}</div>
+        <div class="gw-fix-diff fdr-txt-${f.diff}">FDR ${f.diff}</div>
+      </div>`).join('');
+    }).join('');
+
+    const injStrip=pl.status!=='a'?`<div class="inj-strip">⚠ ${pl.news||'Availability concern'}</div>`:'';
+    const capStrip=(pick.is_captain||pick.is_vice_captain)?`<div class="cap-strip">${pick.is_captain?'Captain this week':'Vice-captain this week'} · Consider based on GW${currentGW} fixture: ${getFixStr(pl.team,gwFixtures)||'No fixture'}</div>`:'';
+    const scorePct=Math.min(100,Math.round((score/12)*100));
+
+    return`<div class="squad-card ${isBench?'bench-card':''}" data-role="${isBench?'bench':'xi'}">
+      <div class="squad-card-header">
+        <div class="squad-card-pos ${pos}">${posLabel(pl.element_type)}</div>
+        <div class="squad-card-info">
+          <div class="squad-card-name">${pl.web_name}${cap}${vice} ${statusBadge(pl)}</div>
+          <div class="squad-card-meta">${team?team.name:''} · Season: ${pl.total_points}pts</div>
+        </div>
+        <div class="squad-card-price">£${price}m</div>
+      </div>
+      <div class="form-graph-wrap">
+        <canvas id="${chartId}" height="50"></canvas>
+      </div>
+      <div class="gw-fixtures">${fdrBoxes}</div>
+      <div class="squad-card-score">
+        <div class="score-label">3-GW Score</div>
+        <div class="score-bar-wrap"><div class="score-bar" style="width:${scorePct}%;background:${score>=8?'var(--green)':score>=5?'#a3e635':score>=3?'#facc15':'#ef4444'}"></div></div>
+        <div class="score-val ${scoreClass}">${score.toFixed(1)}</div>
+      </div>
+      ${injStrip}${capStrip}
+    </div>`;
+  }).join('');
+
+  document.getElementById('squad-cards').innerHTML=cardHtml;
+
+  // Render mini charts
+  setTimeout(()=>{
+    chartIds.forEach(({id,pts})=>{
+      const canvas=document.getElementById(id);
+      if(!canvas||!pts.length)return;
+      const labels=pts.map((_,i)=>'GW'+(currentGW-pts.length+i));
+      new Chart(canvas,{
+        type:'line',
+        data:{
+          labels,
+          datasets:[{
+            data:pts,
+            borderColor:'#00ff87',
+            backgroundColor:'rgba(0,255,135,0.08)',
+            borderWidth:1.5,
+            pointRadius:2.5,
+            pointBackgroundColor:'#00ff87',
+            tension:0.3,
+            fill:true
+          }]
+        },
+        options:{
+          responsive:true,maintainAspectRatio:false,
+          plugins:{legend:{display:false},tooltip:{
+            callbacks:{label:ctx=>'GW pts: '+ctx.raw},
+            backgroundColor:'rgba(0,0,0,0.8)',titleColor:'#888',bodyColor:'#00ff87',
+            displayColors:false,padding:6,cornerRadius:4
+          }},
+          scales:{
+            x:{display:false},
+            y:{display:false,min:0}
+          }
+        }
+      });
+    });
+  },100);
+
+  // === STRATEGY TAB ===
   const alerts=[];
   picks.picks.forEach(p=>{
-    const pl=getPlayerById(p.element);
+    const pl=getPlayer(p.element);
     if(!pl)return;
-    if(pl.status!=='a'&&p.position<=11){
-      alerts.push({icon:'🚨',text:`<strong>${pl.web_name}</strong> is <span style="color:#ef4444">${pl.status==='i'?'injured':pl.status==='d'?'doubtful':'unavailable'}</span> and starting XI${pl.news?' — '+pl.news.substring(0,50):''}`});
-    }
-    const fix=getFixtureStr(pl.team,gwFixtures);
-    if(!fix&&p.position<=11){
-      const team=getTeamById(pl.team);
-      alerts.push({icon:'⚪',text:`<strong>${pl.web_name}</strong> (${team?team.short_name:''}) has <strong style="color:#888">no fixture</strong> this GW`});
-    }
-    if(parseFloat(pl.form)<2&&p.position<=11){
-      alerts.push({icon:'📉',text:`<strong>${pl.web_name}</strong> is out of form — <span style="color:var(--muted)">${pl.form} pts avg last 5 GWs</span>`});
-    }
+    if(pl.status!=='a'&&p.position<=11)
+      alerts.push({icon:'🚨',text:`<strong>${pl.web_name}</strong> is <span style="color:#ef4444">${pl.status==='i'?'injured':pl.status==='d'?'doubtful':'unavailable'}</span>${pl.news?' — '+pl.news.substring(0,55):''}`});
+    const fix=getFixStr(pl.team,gwFixtures);
+    if(!fix&&p.position<=11)
+      alerts.push({icon:'⚪',text:`<strong>${pl.web_name}</strong> (${getTeam(pl.team)?.short_name||''}) has <strong style="color:#555">no fixture</strong> GW${currentGW}`});
+    if(parseFloat(pl.form)<2&&p.position<=11)
+      alerts.push({icon:'📉',text:`<strong>${pl.web_name}</strong> — form: <span style="color:#ef4444">${pl.form}</span> avg pts last 5 GWs`});
   });
 
-  const alertsHtml=alerts.length
-    ?alerts.map(a=>`<div class="alert-row"><div class="alert-icon">${a.icon}</div><div class="alert-text">${a.text}</div></div>`).join('')
-    :'<div style="color:var(--green);font-size:13px;padding:8px 0">No major alerts this GW ✓</div>';
-
-  const availableChips=allChipDefs.filter(c=>!usedChipNames.includes(c.key));
-  const chipAdvice=availableChips.map(c=>{
-    let advice='';
-    if(c.key==='wildcard')advice='Use before a Double Gameweek to restructure your entire squad for free.';
-    if(c.key==='freehit')advice='Best used in a Blank Gameweek to temporarily replace players with no fixture.';
-    if(c.key==='bboost')advice='Play in a Double GW when all 4 bench players have 2 fixtures each.';
-    if(c.key==='3xc')advice='Use on your captain in a Double GW — they play twice so points are tripled.';
-    return `<div class="chip-rec"><div class="chip-rec-name">${c.label}</div><div class="chip-rec-text">${advice}</div></div>`;
-  }).join('')||'<div style="color:var(--muted);font-size:13px">All chips have been used this season.</div>';
-
-  // Transfer candidates — weakest form + hardest upcoming fixtures
-  const candidates=picks.picks.filter(p=>p.position<=11).map(p=>{
-    const pl=getPlayerById(p.element);
-    if(!pl)return null;
-    const fixes=getPlayerFixtures(pl.team,currentGW,3);
-    const validFixes=fixes.filter(Boolean);
-    const avgFdr=validFixes.length?validFixes.reduce((a,f)=>a+f.diff,0)/validFixes.length:3;
-    const form=parseFloat(pl.form)||0;
-    const score=form-(avgFdr*1.5);
-    return{pick:p,pl,avgFdr,form,score};
-  }).filter(Boolean).sort((a,b)=>a.score-b.score).slice(0,2);
-
-  const transferHtml=candidates.map(c=>{
-    const team=getTeamById(c.pl.team);
-    return `<div class="transfer-rec">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-        <span style="color:#ef4444;font-weight:500">OUT: ${c.pl.web_name}</span>
-        <span style="color:var(--muted)">→</span>
-        <span style="color:var(--green);font-weight:500">Consider upgrade</span>
-      </div>
-      <div style="font-size:11px;color:var(--muted)">Form: ${c.form.toFixed(1)} · Avg FDR next 3: ${c.avgFdr.toFixed(1)} · ${team?team.short_name:''} · £${(c.pl.now_cost/10).toFixed(1)}m</div>
-      ${c.pl.news?`<div style="font-size:10px;color:#facc15;margin-top:3px">${c.pl.news.substring(0,60)}</div>`:''}
-    </div>`;
-  }).join('')||'<div style="color:var(--green);font-size:13px">Squad looking solid — hold transfers.</div>';
+  const availChips=allChipDefs.filter(c=>!usedChipNames.includes(c.key));
+  const chipAdvice=availChips.map(c=>{
+    const tips={wildcard:'Use before a Double GW to rebuild squad for free.',freehit:'Use in a Blank GW — temporarily replaces all blanking players.',bboost:'Play in a Double GW when all 4 bench players have 2 fixtures.',['3xc']:'Use on captain in a Double GW — points are tripled.'};
+    return`<div class="chip-rec"><div class="chip-rec-name">${c.label}</div><div class="chip-rec-text">${tips[c.key]}</div></div>`;
+  }).join('')||'<div style="color:var(--muted);font-size:12px">All chips used this season.</div>';
 
   document.getElementById('strategy-grid').innerHTML=`
-    <div class="strategy-card"><h3>GW${currentGW} Alerts</h3>${alertsHtml}</div>
-    <div class="strategy-card"><h3>Chip Recommendations</h3>${chipAdvice}</div>
-    <div class="strategy-card"><h3>Transfer Targets</h3>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Players to consider replacing based on form + fixtures</div>
-      ${transferHtml}
+    <div class="strategy-card"><h3>GW${currentGW} Alerts</h3>
+      ${alerts.length?alerts.map(a=>`<div class="alert-row"><div class="alert-icon">${a.icon}</div><div class="alert-text">${a.text}</div></div>`).join(''):'<div style="color:var(--green);font-size:12px;padding:6px 0">No major alerts ✓</div>'}
     </div>
+    <div class="strategy-card"><h3>Chip Recommendations</h3>${chipAdvice}</div>
     <div class="strategy-card"><h3>Season Overview</h3>
-      <div class="alert-row"><div class="alert-icon">📅</div><div class="alert-text"><strong>${gwsLeft} gameweeks</strong> <span style="color:var(--muted)">remaining</span></div></div>
-      <div class="alert-row"><div class="alert-icon">🎯</div><div class="alert-text"><strong>${availableChips.length} chips</strong> <span style="color:var(--muted)">still available</span></div></div>
+      <div class="alert-row"><div class="alert-icon">📅</div><div class="alert-text"><strong>${gwsLeft} GWs</strong> <span style="color:var(--muted)">remaining</span></div></div>
+      <div class="alert-row"><div class="alert-icon">🎯</div><div class="alert-text"><strong>${availChips.length} chips</strong> <span style="color:var(--muted)">available</span></div></div>
       <div class="alert-row"><div class="alert-icon">💰</div><div class="alert-text"><strong>£${bank.toFixed(1)}m</strong> <span style="color:var(--muted)">in the bank</span></div></div>
       <div class="alert-row"><div class="alert-icon">📊</div><div class="alert-text"><strong>${totalPoints} pts</strong> <span style="color:var(--muted)">· Rank ${rank}</span></div></div>
     </div>
+    <div class="strategy-card"><h3>Team Composition</h3>
+      ${[1,2,3,4].map(et=>{
+        const count=picks.picks.filter(p=>getPlayer(p.element)?.element_type===et).length;
+        const cost=picks.picks.filter(p=>getPlayer(p.element)?.element_type===et).reduce((a,p)=>{const pl=getPlayer(p.element);return a+(pl?pl.now_cost/10:0);},0);
+        return`<div class="alert-row"><div class="alert-icon" style="width:28px;text-align:center;font-size:10px;font-weight:700;color:${['','var(--gk)','var(--def)','var(--mid)','var(--fwd)'][et]}">${posLabel(et)}</div><div class="alert-text"><strong>${count} players</strong> <span style="color:var(--muted)">· £${cost.toFixed(1)}m spent</span></div></div>`;
+      }).join('')}
+    </div>
   `;
 
-  // Fixture table
-  const squadTeamIds=[...new Set(picks.picks.map(p=>getPlayerById(p.element)?.team).filter(Boolean))];
-  const gwRange=Array.from({length:6},(_,i)=>currentGW+i);
-  const fixtureRows=squadTeamIds.map(tid=>{
-    const team=getTeamById(tid);
-    const fixes=getPlayerFixtures(tid,currentGW,6);
-    return `<tr><td>${team?team.short_name:'?'}</td>${fixes.map(f=>`<td><div style="display:flex;justify-content:center">${fdrBox(f)}</div></td>`).join('')}</tr>`;
-  }).join('');
+  // Captain recommendation (top 3 scorers by score over next 3 GWs, from starting XI)
+  const capCandidates=starters.map(pick=>{
+    const pl=getPlayer(pick.element);
+    if(!pl)return null;
+    const{score,form,avgFdr,fixes}=playerScore(pl,currentGW,3);
+    const team=getTeam(pl.team);
+    return{pick,pl,team,score,form,avgFdr,fixes};
+  }).filter(Boolean).sort((a,b)=>b.score-a.score).slice(0,3);
 
+  document.getElementById('captain-rec').innerHTML=`
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;">
+    ${capCandidates.map((c,i)=>{
+      const medal=['🥇','🥈','🥉'][i];
+      const fdrBoxes3=c.fixes.slice(0,3).map(f=>f?`<div class="fdr-box fdr-${f.diff}" title="${f.opp} ${f.home?'H':'A'}" style="width:30px">${f.diff}</div>`:`<div class="fdr-box fdr-blank">—</div>`).join('');
+      return`<div class="strategy-card" style="padding:14px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span style="font-size:18px">${medal}</span>
+          <div>
+            <div style="font-weight:600;font-size:14px">${c.pl.web_name} <span style="font-size:10px;color:var(--muted)">${c.team?c.team.short_name:''}</span></div>
+            <div style="font-size:11px;color:var(--muted)">Form: ${c.form.toFixed(1)} · Avg FDR: ${c.avgFdr} · Score: <span style="color:var(--green)">${c.score.toFixed(1)}</span></div>
+          </div>
+        </div>
+        <div style="display:flex;gap:4px;margin-bottom:8px">${fdrBoxes3}</div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.5">
+          ${i===0?'<strong style="color:var(--green)">Recommended captain</strong> — best combination of form and upcoming fixtures.':i===1?'Strong alternative if captain has a tough GW'+currentGW+' fixture.':'Differential option — lower ownership, high upside.'}
+        </div>
+      </div>`;
+    }).join('')}
+    </div>
+  `;
+
+  // Transfer recommendations — worst score players vs best available replacements
+  const worstXI=starters.map(pick=>{
+    const pl=getPlayer(pick.element);
+    if(!pl)return null;
+    const{score,form,avgFdr}=playerScore(pl,currentGW,3);
+    return{pick,pl,score,form,avgFdr,team:getTeam(pl.team)};
+  }).filter(Boolean).sort((a,b)=>a.score-b.score).slice(0,3);
+
+  // Find top value replacements from same position in bootstrap (top 30 by pts, same pos, affordable)
+  function findReplacements(pl,budget){
+    const maxCost=pl.now_cost+Math.floor(bank*10)+10;
+    return bootstrapData.elements
+      .filter(e=>e.element_type===pl.element_type&&e.id!==pl.id&&e.now_cost<=maxCost&&e.status==='a')
+      .map(e=>{
+        const{score}=playerScore(e,currentGW,3);
+        return{pl:e,score,team:getTeam(e.team)};
+      })
+      .sort((a,b)=>b.score-a.score)
+      .slice(0,2);
+  }
+
+  document.getElementById('transfer-recs').innerHTML=`
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:10px;">
+    ${worstXI.map(c=>{
+      const reps=findReplacements(c.pl,bank);
+      const repHtml=reps.map(r=>{
+        const fixes3=getPlayerFixtures(r.pl.team,currentGW,3);
+        const fdrMini=fixes3.slice(0,3).map(f=>f?`<div class="fdr-box fdr-${f.diff}" style="width:22px;height:18px;font-size:8px">${f.diff}</div>`:`<div class="fdr-box fdr-blank" style="width:22px;height:18px;font-size:8px">—</div>`).join('');
+        return`<div style="background:var(--panel2);border-radius:5px;padding:8px 10px;margin-top:6px;display:flex;align-items:center;gap:8px;">
+          <div style="flex:1">
+            <div style="font-size:12px;font-weight:500;color:var(--green)">→ ${r.pl.web_name} <span style="color:var(--muted);font-weight:400">${r.team?r.team.short_name:''}</span></div>
+            <div style="font-size:10px;color:var(--muted)">£${(r.pl.now_cost/10).toFixed(1)}m · Form: ${parseFloat(r.pl.form).toFixed(1)} · Score: ${r.score.toFixed(1)}</div>
+          </div>
+          <div style="display:flex;gap:2px">${fdrMini}</div>
+        </div>`;
+      }).join('');
+
+      const fixes3=getPlayerFixtures(c.pl.team,currentGW,3);
+      const fdrMini=fixes3.slice(0,3).map(f=>f?`<div class="fdr-box fdr-${f.diff}" style="width:22px;height:18px;font-size:8px">${f.diff}</div>`:`<div class="fdr-box fdr-blank" style="width:22px;height:18px;font-size:8px">—</div>`).join('');
+
+      return`<div class="strategy-card">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="color:#ef4444;font-size:13px">↓ OUT</span>
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:13px">${c.pl.web_name} <span style="font-size:10px;color:var(--muted)">${c.team?c.team.short_name:''} · £${(c.pl.now_cost/10).toFixed(1)}m</span></div>
+            <div style="font-size:10px;color:var(--muted)">Form: ${c.form.toFixed(1)} · Score: <span style="color:#ef4444">${c.score.toFixed(1)}</span></div>
+          </div>
+          <div style="display:flex;gap:2px">${fdrMini}</div>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-bottom:4px">Suggested replacements (within budget):</div>
+        ${repHtml||'<div style="font-size:11px;color:var(--muted)">No affordable upgrades found</div>'}
+      </div>`;
+    }).join('')}
+    </div>
+  `;
+
+  // Fixtures table
+  const squadTeamIds=[...new Set(picks.picks.map(p=>getPlayer(p.element)?.team).filter(Boolean))];
+  const gwRange=Array.from({length:6},(_,i)=>currentGW+i);
   document.getElementById('fixture-table').innerHTML=`
     <thead><tr><th>Team</th>${gwRange.map(gw=>`<th>GW${gw}</th>`).join('')}</tr></thead>
-    <tbody>${fixtureRows}</tbody>
+    <tbody>${squadTeamIds.map(tid=>{
+      const team=getTeam(tid);
+      const fixes=getPlayerFixtures(tid,currentGW,6);
+      return`<tr><td>${team?team.short_name:'?'}</td>${fixes.map(f=>`<td><div style="display:flex;justify-content:center">${fdrBox(f,true)}</div></td>`).join('')}</tr>`;
+    }).join('')}</tbody>
   `;
 
   // Snapshot
   const allPicksInfo=picks.picks.map(p=>{
-    const pl=getPlayerById(p.element);
-    const team=pl?getTeamById(pl.team):null;
-    const fix=pl?getFixtureStr(pl.team,gwFixtures):null;
+    const pl=getPlayer(p.element);
+    const team=pl?getTeam(pl.team):null;
+    const fix=pl?getFixStr(pl.team,gwFixtures):null;
     const price=pl?(pl.now_cost/10).toFixed(1):'?';
     const form=pl?parseFloat(pl.form).toFixed(1):'?';
     const role=p.position<=11?'XI':'BENCH';
     const cap=p.is_captain?' [CAPTAIN]':p.is_vice_captain?' [VICE]':'';
     const inj=pl&&pl.status!=='a'?' ['+pl.status.toUpperCase()+']':'';
-    const fixStr=fix||'No fixture';
-    return '  '+role+' | '+posLabel(pl?.element_type)+' | '+(pl?pl.web_name:'Unknown')+cap+inj+' | '+(team?team.short_name:'?')+' | £'+price+'m | Form:'+form+' | '+fixStr;
+    const{score}=pl?playerScore(pl,currentGW,3):{score:0};
+    const fixes3=pl?getPlayerFixtures(pl.team,currentGW,3).filter(Boolean).map(f=>f.opp+(f.home?'H':'A')+'('+f.diff+')').join(','):'';
+    return`  ${role} | ${posLabel(pl?.element_type)} | ${pl?pl.web_name:'?'}${cap}${inj} | ${team?team.short_name:'?'} | £${price}m | Form:${form} | 3GW-Score:${score.toFixed(1)} | GW${currentGW}:${fix||'No fix'} | Next3:[${fixes3}]`;
   });
 
   const chipsInfo=allChipDefs.map(c=>{
     const used=usedChipNames.includes(c.key);
     const gw=used?usedChipsRaw.find(u=>u.name===c.key)?.event:null;
-    return '  '+c.label+': '+(used?'USED (GW'+gw+')':'AVAILABLE');
+    return`  ${c.label}: ${used?'USED (GW'+gw+')':'AVAILABLE'}`;
   });
 
+  const alertLines=alerts.map(a=>`  ${a.icon} ${a.text.replace(/<[^>]+>/g,'')}`);
   const recentTransfers=transfers.slice(0,5).map(t=>{
-    const out=getPlayerById(t.element_out);
-    const inn=getPlayerById(t.element_in);
-    return '  GW'+t.event+': OUT '+(out?out.web_name:'?')+' → IN '+(inn?inn.web_name:'?');
+    const out=getPlayer(t.element_out);
+    const inn=getPlayer(t.element_in);
+    return`  GW${t.event}: OUT ${out?out.web_name:'?'} → IN ${inn?inn.web_name:'?'}`;
   });
-
-  const alertLines=alerts.map(a=>'  '+a.icon+' '+a.text.replace(/<[^>]+>/g,''));
 
   snapshotText=`=== FPL CLAUDE SNAPSHOT — GW${currentGW} ===
 Manager: ${managerName}
@@ -539,11 +737,10 @@ Team: ${teamName}
 GW${currentGW} Points: ${gwPoints}
 Total Points: ${totalPoints}
 Overall Rank: ${rank}
-Bank: £${bank.toFixed(1)}m
-Squad Value: £${teamValue.toFixed(1)}m
+Bank: £${bank.toFixed(1)}m · Squad Value: £${teamValue.toFixed(1)}m
 GWs Remaining: ${gwsLeft}
 
-SQUAD:
+SQUAD (role|pos|name|club|price|form|3gw-score|gw${currentGW} fixture|next 3 fixtures[fdr]):
 ${allPicksInfo.join('\n')}
 
 CHIPS:
@@ -554,7 +751,6 @@ ${alertLines.length?alertLines.join('\n'):'  No major alerts'}
 
 RECENT TRANSFERS (last 5):
 ${recentTransfers.length?recentTransfers.join('\n'):'  None'}
-
 === END SNAPSHOT ===`;
 
   document.getElementById('copy-box').textContent=snapshotText;
@@ -563,18 +759,28 @@ ${recentTransfers.length?recentTransfers.join('\n'):'  None'}
   document.getElementById('switch-btn').style.display='block';
 }
 
+function filterCards(type){
+  document.querySelectorAll('.squad-card').forEach(c=>{
+    const role=c.dataset.role;
+    c.style.display=(type==='all'||role===type)?'':'none';
+  });
+  ['all','xi','bench'].forEach(t=>{
+    const btn=document.getElementById('filter-'+t);
+    if(btn){btn.style.background=t===type?'var(--green)':'transparent';btn.style.color=t===type?'#000':'var(--muted)';}
+  });
+}
+
 function copySnapshot(){
   navigator.clipboard.writeText(snapshotText).then(()=>{
     const btn=document.querySelector('.copy-btn');
-    const orig=btn.textContent;
-    btn.textContent='COPIED ✓';
-    setTimeout(()=>btn.textContent=orig,2000);
+    const o=btn.textContent;btn.textContent='COPIED ✓';
+    setTimeout(()=>btn.textContent=o,2000);
   });
 }
 
 function switchTeam(){
   localStorage.removeItem('fpl_team_id');
-  teamId=null;bootstrapData=null;
+  teamId=null;bootstrapData=null;playerHistories={};
   document.getElementById('team-id-input').value='';
   document.getElementById('dashboard').style.display='none';
   document.getElementById('switch-btn').style.display='none';
@@ -585,11 +791,7 @@ function switchTeam(){
 
 window.addEventListener('load',()=>{
   const saved=localStorage.getItem('fpl_team_id');
-  if(saved){
-    document.getElementById('team-id-input').value=saved;
-    teamId=parseInt(saved);
-    fetchAndRender();
-  }
+  if(saved){document.getElementById('team-id-input').value=saved;teamId=parseInt(saved);fetchAndRender();}
 });
 </script>
 </body>

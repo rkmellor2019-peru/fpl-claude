@@ -188,6 +188,8 @@ input[type="text"]:focus{border-color:var(--green);}
 .xfer-plr .x-name{font-weight:500;color:var(--text);flex:1;}
 .xfer-plr .x-meta{font-size:10px;color:var(--muted);}
 .xfer-plr .x-pts{font-family:'DM Mono',monospace;font-size:10px;color:var(--green);margin-left:auto;flex-shrink:0;}
+.xfer-plr.xfer-unaffordable{opacity:0.35;cursor:not-allowed;}
+.xfer-plr.xfer-poor-value{border-color:rgba(239,68,68,0.3);}
 .squad-card.squad-card-injured{border-color:rgba(239,68,68,0.4);box-shadow:0 0 0 1px rgba(239,68,68,0.08);}
 @media(max-width:700px){#tab-planner .page>div:nth-child(4){grid-template-columns:1fr;}}
 
@@ -1281,9 +1283,11 @@ function switchTeam(){
 
 
 // ─── PLANNER ─────────────────────────────────────────────────────────────────
-let plannerState = null; // { xi: [...], bench: [...], transfers: [...], formation: [d,m,f] }
-let plannerDragSrc = null; // { player, zone: 'xi'|'bench'|'xfer' }
+let plannerState = null;
+let plannerDragSrc = null;
 let plannerTransferCache = [];
+let plannerBank = 0;       // in tenths (same as FPL API)
+let plannerFTAvailable = 1; // free transfers available this GW
 
 const FORMATIONS = [
   [4,4,2],[4,3,3],[4,5,1],[3,5,2],[3,4,3],[5,3,2],[5,4,1],[5,2,3],[4,2,4]
@@ -1302,34 +1306,70 @@ function plannerDetectFormation(xi) {
   return [defs, mids, fwds];
 }
 
+// How many external transfers have been made (from xfer pool, not bench swaps)
+function plannerXferCount() {
+  if (!plannerState) return 0;
+  return [...plannerState.xi, ...plannerState.bench].filter(p => p._new).length;
+}
+
+// Point cost of the current set of transfers
+function plannerHitCost() {
+  const hits = Math.max(0, plannerXferCount() - plannerFTAvailable);
+  return hits * 4;
+}
+
+// Remaining budget after all incoming transfers
+function plannerRemainingBank() {
+  if (!plannerState) return plannerBank;
+  let bank = plannerBank;
+  [...plannerState.xi, ...plannerState.bench].forEach(p => {
+    if (p._new) bank -= p.now_cost;       // paying for incoming
+    if (p._outCost) bank += p._outCost;   // recouping from outgoing
+  });
+  return bank;
+}
+
+// Can we afford to bring in this player, displacing the target?
+function plannerCanAfford(incomingCost, displacedCost) {
+  // Available spend = bank + what we get from selling displaced player
+  const available = plannerBank + displacedCost;
+  return incomingCost <= available;
+}
+
+// Net pts gain for an external transfer: incoming pts - outgoing pts - hit cost (if applicable)
+function plannerNetGain(inPl, outPl) {
+  const inPts  = plannerProjectedPts(inPl);
+  const outPts = plannerProjectedPts(outPl);
+  const xfersMade = plannerXferCount(); // before this transfer
+  const isFree = xfersMade < plannerFTAvailable;
+  const hitCost = isFree ? 0 : 4;
+  return { inPts, outPts, gain: inPts - outPts - hitCost, isFree, hitCost };
+}
+
 function plannerInit(picks, gwFixtures) {
   if (!bootstrapData) return;
+
+  plannerFTAvailable = picks.entry_history.event_transfers_cost > 0 ? 1
+    : Math.min(2, 2 - (picks.entry_history.event_transfers || 0) + 1);
+  plannerBank = picks.entry_history.bank; // tenths
+
   const starters = picks.picks.filter(p => p.position <= 11).map(p => {
     const pl = getPlayer(p.element);
-    return {...pl, _captain: p.is_captain, _vice: p.is_vice_captain, _zone: 'xi', _new: false};
+    return {...pl, _captain: p.is_captain, _vice: p.is_vice_captain, _zone: 'xi', _new: false, _outCost: 0};
   });
   const bench = picks.picks.filter(p => p.position > 11).map(p => {
     const pl = getPlayer(p.element);
-    return {...pl, _captain: false, _vice: false, _zone: 'bench', _new: false};
+    return {...pl, _captain: false, _vice: false, _zone: 'bench', _new: false, _outCost: 0};
   });
 
   const [d,m,f] = plannerDetectFormation(starters.filter(p => p.element_type !== 1));
 
-  // Build transfer pool: top 60 players by total_points, not in squad, grouped by pos
   const squadIds = new Set(picks.picks.map(p => p.element));
-  plannerTransferCache = [2,3,4].flatMap(et =>
+  plannerTransferCache = [1,2,3,4].flatMap(et =>
     bootstrapData.elements
       .filter(e => e.element_type === et && !squadIds.has(e.id) && e.status !== 'u' && e.total_points > 0)
       .sort((a,b) => b.total_points - a.total_points)
-      .slice(0, 40)
-      .map(e => ({...e, _zone: 'xfer', _new: false}))
-  );
-  // Add GK transfers too
-  plannerTransferCache = plannerTransferCache.concat(
-    bootstrapData.elements
-      .filter(e => e.element_type === 1 && !squadIds.has(e.id) && e.status !== 'u' && e.total_points > 0)
-      .sort((a,b) => b.total_points - a.total_points)
-      .slice(0, 10)
+      .slice(0, et === 1 ? 10 : 40)
       .map(e => ({...e, _zone: 'xfer', _new: false}))
   );
 
@@ -1344,24 +1384,35 @@ function plannerReset() {
 
 function plannerTotalPts() {
   if (!plannerState) return 0;
-  return plannerState.xi.reduce((sum, pl) => {
+  const raw = plannerState.xi.reduce((sum, pl) => {
     let pts = plannerProjectedPts(pl);
     if (pl._captain) pts *= 2;
     return sum + pts;
   }, 0);
+  return raw - plannerHitCost();
 }
 
 function plannerRenderPtsBar() {
-  const total = plannerTotalPts();
-  const cap = plannerState.xi.find(p => p._captain);
-  const fix = cap ? getFixStr(cap.team, plannerState.gwFixtures) : '—';
-  const transferCount = plannerState.xi.filter(p => p._new).length;
+  const xfers   = plannerXferCount();
+  const hits    = Math.max(0, xfers - plannerFTAvailable);
+  const hitCost = hits * 4;
+  const total   = plannerTotalPts();
+  const bankRem = plannerRemainingBank();
+  const cap     = plannerState.xi.find(p => p._captain);
+  const fix     = cap ? getFixStr(cap.team, plannerState.gwFixtures) : '—';
+
+  const bankColor = bankRem < 0 ? 'red' : 'green';
+  const xferLabel = xfers === 0 ? '—'
+    : xfers <= plannerFTAvailable ? `${xfers} free`
+    : `${plannerFTAvailable} free + ${hits} hit`;
+
   document.getElementById('planner-pts-bar').innerHTML = `
     <div class="stat-card"><div class="label">Projected GW${currentGW}</div><div class="value green">${total.toFixed(1)}</div></div>
     <div class="stat-card"><div class="label">Formation</div><div class="value" style="font-size:18px">1-${plannerState.formation.join('-')}</div></div>
     <div class="stat-card"><div class="label">Captain</div><div class="value" style="font-size:14px;font-family:'DM Sans';font-weight:600">${cap ? cap.web_name : '—'}</div></div>
-    <div class="stat-card"><div class="label">Cap Fixture</div><div class="value" style="font-size:13px;font-family:'DM Sans'">${fix || 'No fix'}</div></div>
-    <div class="stat-card"><div class="label">Changes</div><div class="value ${transferCount > 0 ? 'amber' : ''}">${transferCount}</div></div>
+    <div class="stat-card"><div class="label">Bank Left</div><div class="value ${bankColor}">£${(bankRem/10).toFixed(1)}m</div></div>
+    <div class="stat-card"><div class="label">Transfers</div><div class="value ${hits > 0 ? 'amber' : ''}">${xferLabel}</div></div>
+    ${hitCost > 0 ? `<div class="stat-card"><div class="label">Hit Cost</div><div class="value red">-${hitCost}pts</div></div>` : ''}
   `;
 }
 
@@ -1376,7 +1427,7 @@ function plannerRenderFormations() {
 
 function plannerSetFormation(d, m, f) {
   if (!plannerState) return;
-  const gk = plannerState.xi.filter(p => p.element_type === 1);
+  const gk   = plannerState.xi.filter(p => p.element_type === 1);
   const defs = plannerState.xi.filter(p => p.element_type === 2);
   const mids = plannerState.xi.filter(p => p.element_type === 3);
   const fwds = plannerState.xi.filter(p => p.element_type === 4);
@@ -1384,31 +1435,23 @@ function plannerSetFormation(d, m, f) {
 
   function adjustRow(current, target, pos) {
     let row = [...current];
-    if (row.length === target) return { row, bench: [] };
     const moved = [];
     while (row.length > target) {
-      // Move worst scorer to bench
       row.sort((a,b) => plannerProjectedPts(a) - plannerProjectedPts(b));
       moved.push({...row.shift(), _zone: 'bench'});
     }
     while (row.length < target) {
-      // Pull best available from bench matching position
       const idx = allBench.findIndex(p => p.element_type === pos);
       if (idx >= 0) {
         row.push({...allBench.splice(idx, 1)[0], _zone: 'xi'});
-      } else {
-        break; // can't fill — leave short
-      }
+      } else break;
     }
     return { row, moved };
   }
 
-  const rDef = adjustRow(defs, d, 2);
-  allBench.push(...(rDef.moved || []));
-  const rMid = adjustRow(mids, m, 3);
-  allBench.push(...(rMid.moved || []));
-  const rFwd = adjustRow(fwds, f, 4);
-  allBench.push(...(rFwd.moved || []));
+  const rDef = adjustRow(defs, d, 2); allBench.push(...(rDef.moved || []));
+  const rMid = adjustRow(mids, m, 3); allBench.push(...(rMid.moved || []));
+  const rFwd = adjustRow(fwds, f, 4); allBench.push(...(rFwd.moved || []));
 
   plannerState.xi = [...gk, ...rDef.row, ...rMid.row, ...rFwd.row];
   plannerState.bench = allBench;
@@ -1421,11 +1464,11 @@ function plannerCard(pl, zone, idx) {
   const fix = getFixStr(pl.team, plannerState.gwFixtures);
   const pos = posClass(pl.element_type);
   const posColors = {gk:'var(--gk)',def:'var(--def)',mid:'var(--mid)',fwd:'var(--fwd)'};
-  const capBadge = pl._captain ? '<span class="pln-badge cap-b">©</span>' : '';
-  const viceBadge = pl._vice ? '<span class="pln-badge" style="background:#555;color:#fff">v</span>' : '';
-  const injBadge = pl.status !== 'a' ? '<span class="pln-badge inj-b">!</span>' : '';
-  const newBadge = pl._new ? '<span class="pln-badge new-b">NEW</span>' : '';
-  const finalPts = pl._captain ? pts * 2 : pts;
+  const capBadge  = pl._captain ? '<span class="pln-badge cap-b">©</span>' : '';
+  const viceBadge = pl._vice    ? '<span class="pln-badge" style="background:#555;color:#fff">v</span>' : '';
+  const injBadge  = pl.status !== 'a' ? '<span class="pln-badge inj-b">!</span>' : '';
+  const newBadge  = pl._new ? '<span class="pln-badge new-b">NEW</span>' : '';
+  const finalPts  = pl._captain ? pts * 2 : pts;
   return `<div class="pln-card ${pl._captain?'captain':''} ${pl._new?'transferred-in':''}"
     draggable="true"
     data-zone="${zone}" data-idx="${idx}" data-pos="${pl.element_type}"
@@ -1433,7 +1476,7 @@ function plannerCard(pl, zone, idx) {
     ondragover="plannerDragOver(event)"
     ondragleave="plannerDragLeave(event)"
     ondrop="plannerDrop(event)"
-    style="border-${zone==='xi'?'bottom':'top'}-color:${posColors[pos] || 'var(--border)'};border-width:1px;"
+    style="border-bottom:2px solid ${posColors[pos] || 'var(--border)'};"
   >
     <div style="width:5px;height:5px;border-radius:50%;background:${posColors[pos]};margin:0 auto 3px;"></div>
     <div class="pln-name">${pl.web_name}</div>
@@ -1452,9 +1495,9 @@ function plannerRenderPitch() {
   const mids = xi.filter(p => p.element_type === 3);
   const fwds = xi.filter(p => p.element_type === 4);
 
-  function row(players, label, globalOffset) {
+  function row(players, label, offset) {
     return `<div class="pln-pos-label">${label}</div>
-    <div class="pln-pos-row">${players.map((pl, i) => plannerCard(pl, 'xi', globalOffset + i)).join('')}</div>`;
+    <div class="pln-pos-row">${players.map((pl,i) => plannerCard(pl,'xi',offset+i)).join('')}</div>`;
   }
 
   document.getElementById('planner-pitch').innerHTML = `
@@ -1463,8 +1506,8 @@ function plannerRenderPitch() {
     <div style="position:relative;z-index:1;padding:8px 4px;">
       ${row(gks,'Goalkeeper', 0)}
       ${row(defs,'Defenders', gks.length)}
-      ${row(mids,'Midfielders', gks.length + defs.length)}
-      ${row(fwds,'Forwards', gks.length + defs.length + mids.length)}
+      ${row(mids,'Midfielders', gks.length+defs.length)}
+      ${row(fwds,'Forwards', gks.length+defs.length+mids.length)}
     </div>
     <div style="text-align:center;font-size:9px;color:rgba(255,255,255,0.18);letter-spacing:2px;text-transform:uppercase;padding:4px 0 2px;">Drag to swap · Drop from bench or transfers</div>
   `;
@@ -1476,7 +1519,6 @@ function plannerRenderBench() {
   const posColors = {1:'var(--gk)',2:'var(--def)',3:'var(--mid)',4:'var(--fwd)'};
   document.getElementById('planner-bench').innerHTML = bench.map((pl, i) => {
     const pts = plannerProjectedPts(pl);
-    const pos = posLabel(pl.element_type);
     return `<div class="bench-plr ${pl._new?'transferred-in':''}"
       draggable="true" data-zone="bench" data-idx="${i}" data-pos="${pl.element_type}"
       ondragstart="plannerDragStart(event)"
@@ -1484,10 +1526,10 @@ function plannerRenderBench() {
       ondragleave="plannerDragLeave(event)"
       ondrop="plannerDrop(event)"
     >
-      <div class="b-pos" style="background:${posColors[pl.element_type]}22;color:${posColors[pl.element_type]}">${pos}</div>
+      <div class="b-pos" style="background:${posColors[pl.element_type]}22;color:${posColors[pl.element_type]}">${posLabel(pl.element_type)}</div>
       <div>
         <div class="b-name">${pl.web_name} ${pl._new?'<span style="font-size:9px;color:var(--green)">(NEW)</span>':''}</div>
-        <div class="b-meta">${getTeam(pl.team)?.short_name||''} · £${(pl.now_cost/10).toFixed(1)}m · ${pl.status!=='a'?'⚠ ':''}</div>
+        <div class="b-meta">${getTeam(pl.team)?.short_name||''} · £${(pl.now_cost/10).toFixed(1)}m${pl.status!=='a'?' · ⚠':''}</div>
       </div>
       <div class="b-pts">${pts.toFixed(1)}</div>
     </div>`;
@@ -1497,25 +1539,62 @@ function plannerRenderBench() {
 function plannerRenderTransfers(filter='') {
   const posColors = {1:'var(--gk)',2:'var(--def)',3:'var(--mid)',4:'var(--fwd)'};
   const f = filter.toLowerCase();
+
+  // Current bank available for next transfer (sell price of first squad player we'd move = unknown here,
+  // so we show affordability dynamically — just list all and mark unaffordable)
+  const bankNow = plannerRemainingBank(); // tenths
+
   const list = plannerTransferCache
     .filter(pl => !f || pl.web_name.toLowerCase().includes(f) || (getTeam(pl.team)?.short_name||'').toLowerCase().includes(f))
     .sort((a,b) => plannerProjectedPts(b) - plannerProjectedPts(a))
-    .slice(0, 40);
+    .slice(0, 50);
 
-  document.getElementById('planner-transfers').innerHTML = list.map((pl, i) => {
-    const pts = plannerProjectedPts(pl);
-    const pos = posLabel(pl.element_type);
-    const fix = getFixStr(pl.team, plannerState.gwFixtures);
-    return `<div class="xfer-plr"
-      draggable="true" data-zone="xfer" data-xferid="${pl.id}" data-pos="${pl.element_type}"
+  document.getElementById('planner-transfers').innerHTML = list.map(pl => {
+    const pts    = plannerProjectedPts(pl);
+    const pos    = posLabel(pl.element_type);
+    const fix    = getFixStr(pl.team, plannerState.gwFixtures);
+    const xfers  = plannerXferCount();
+    const isFree = xfers < plannerFTAvailable;
+    const hitCost = isFree ? 0 : 4;
+
+    // We don't know which player they'll displace yet — use cheapest same-pos squad player as worst case
+    const cheapestOut = [...plannerState.xi, ...plannerState.bench]
+      .filter(p => p.element_type === pl.element_type && !p._new)
+      .sort((a,b) => a.now_cost - b.now_cost)[0];
+    const maxAffordable = bankNow + (cheapestOut ? cheapestOut.now_cost : 0);
+    const canAfford = pl.now_cost <= maxAffordable;
+
+    // Best case net gain: vs worst squad player of same pos
+    const worstSamePos = [...plannerState.xi, ...plannerState.bench]
+      .filter(p => p.element_type === pl.element_type)
+      .sort((a,b) => plannerProjectedPts(a) - plannerProjectedPts(b))[0];
+    const bestGain = worstSamePos ? pts - plannerProjectedPts(worstSamePos) - hitCost : null;
+    const poorValue = bestGain !== null && bestGain <= 0 && hitCost > 0;
+    const hitWarning = !isFree && bestGain !== null && bestGain <= 4;
+
+    const costLabel = isFree
+      ? `<span style="font-size:9px;color:var(--green);margin-left:auto;">Free</span>`
+      : poorValue
+        ? `<span style="font-size:9px;color:#ef4444;margin-left:auto;">-4pts · Poor value</span>`
+        : hitWarning
+          ? `<span style="font-size:9px;color:#facc15;margin-left:auto;">-4pts · Marginal</span>`
+          : `<span style="font-size:9px;color:#fb923c;margin-left:auto;">-4pts hit</span>`;
+
+    return `<div class="xfer-plr ${!canAfford?'xfer-unaffordable':''} ${poorValue?'xfer-poor-value':''}"
+      draggable="${canAfford}"
+      data-zone="xfer" data-xferid="${pl.id}" data-pos="${pl.element_type}"
       ondragstart="plannerDragStart(event)"
+      title="${!canAfford?'Too expensive for current budget':''}"
     >
       <div class="x-pos" style="background:${posColors[pl.element_type]}22;color:${posColors[pl.element_type]}">${pos}</div>
-      <div>
-        <div class="x-name">${pl.web_name}</div>
+      <div style="flex:1;min-width:0;">
+        <div class="x-name" style="color:${!canAfford?'var(--muted)':'var(--text)'};">${pl.web_name}</div>
         <div class="x-meta">${getTeam(pl.team)?.short_name||''} · £${(pl.now_cost/10).toFixed(1)}m · ${fix||'No fix'}</div>
       </div>
-      <div class="x-pts">${pts.toFixed(1)}</div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0;">
+        <div class="x-pts" style="color:${!canAfford?'var(--muted)':'var(--green)'};">${pts.toFixed(1)}</div>
+        ${costLabel}
+      </div>
     </div>`;
   }).join('') || '<div style="font-size:11px;color:var(--muted);padding:8px 0">No results</div>';
 }
@@ -1537,28 +1616,26 @@ function plannerRenderAll() {
 function plannerDragStart(e) {
   const el = e.currentTarget;
   const zone = el.dataset.zone;
-  const idx = parseInt(el.dataset.idx);
-  const pos = parseInt(el.dataset.pos);
 
   if (zone === 'xi') {
+    const idx = parseInt(el.dataset.idx);
     plannerDragSrc = { player: {...plannerState.xi[idx]}, zone: 'xi', idx };
   } else if (zone === 'bench') {
+    const idx = parseInt(el.dataset.idx);
     plannerDragSrc = { player: {...plannerState.bench[idx]}, zone: 'bench', idx };
   } else if (zone === 'xfer') {
     const pid = parseInt(el.dataset.xferid);
-    const pl = plannerTransferCache.find(p => p.id === pid);
-    plannerDragSrc = { player: {...pl, _new: true, _zone:'xfer'}, zone: 'xfer', idx: -1 };
+    const pl  = plannerTransferCache.find(p => p.id === pid);
+    if (!pl) return;
+    plannerDragSrc = { player: {...pl, _new: true}, zone: 'xfer', idx: -1 };
   }
   el.classList.add('dragging');
   e.dataTransfer.effectAllowed = 'move';
   setTimeout(() => el.classList.remove('dragging'), 0);
 }
 
-function plannerCanSwap(srcPos, tgtPos, tgtZone) {
-  // GKs can only swap with GKs
+function plannerCanSwap(srcPos, tgtPos) {
   if (srcPos === 1 || tgtPos === 1) return srcPos === tgtPos;
-  // From xfer: any outfield can go to any outfield slot
-  // From bench/xi: same position required for formation integrity
   return true;
 }
 
@@ -1567,7 +1644,7 @@ function plannerDragOver(e) {
   if (!plannerDragSrc) return;
   const el = e.currentTarget;
   const tgtPos = parseInt(el.dataset.pos);
-  const ok = plannerCanSwap(plannerDragSrc.player.element_type, tgtPos, el.dataset.zone);
+  const ok = plannerCanSwap(plannerDragSrc.player.element_type, tgtPos);
   el.classList.remove('drag-over','invalid-over');
   el.classList.add(ok ? 'drag-over' : 'invalid-over');
 }
@@ -1583,54 +1660,94 @@ function plannerDrop(e) {
   if (!plannerDragSrc) return;
 
   const tgtZone = el.dataset.zone;
-  const tgtIdx = parseInt(el.dataset.idx);
-  const tgtPos = parseInt(el.dataset.pos);
-  const src = plannerDragSrc;
+  const tgtIdx  = parseInt(el.dataset.idx);
+  const tgtPos  = parseInt(el.dataset.pos);
+  const src     = plannerDragSrc;
   plannerDragSrc = null;
 
-  if (!plannerCanSwap(src.player.element_type, tgtPos, tgtZone)) return;
+  if (!plannerCanSwap(src.player.element_type, tgtPos)) return;
 
-  // Get target player
   let tgtPlayer;
-  if (tgtZone === 'xi') tgtPlayer = {...plannerState.xi[tgtIdx]};
+  if (tgtZone === 'xi')    tgtPlayer = {...plannerState.xi[tgtIdx]};
   else if (tgtZone === 'bench') tgtPlayer = {...plannerState.bench[tgtIdx]};
   else return;
 
-  // Perform swap
-  if (src.zone === 'xi' && tgtZone === 'xi') {
-    plannerState.xi[src.idx] = tgtPlayer;
-    plannerState.xi[tgtIdx] = src.player;
-  } else if (src.zone === 'bench' && tgtZone === 'xi') {
-    plannerState.xi[tgtIdx] = {...src.player, _zone:'xi'};
-    plannerState.bench[src.idx] = {...tgtPlayer, _zone:'bench'};
-  } else if (src.zone === 'xi' && tgtZone === 'bench') {
-    plannerState.bench[tgtIdx] = {...src.player, _zone:'bench'};
-    plannerState.xi[src.idx] = {...tgtPlayer, _zone:'xi'};
-  } else if (src.zone === 'bench' && tgtZone === 'bench') {
-    plannerState.bench[src.idx] = tgtPlayer;
-    plannerState.bench[tgtIdx] = src.player;
-  } else if (src.zone === 'xfer' && tgtZone === 'xi') {
-    // Transfer in: replace xi player, push them to bench
-    const displaced = {...plannerState.xi[tgtIdx], _zone:'bench'};
-    plannerState.xi[tgtIdx] = {...src.player, _zone:'xi'};
-    // Remove from transfer cache
-    plannerTransferCache = plannerTransferCache.filter(p => p.id !== src.player.id);
-    // Add displaced back to transfer pool
-    const wasXfer = displaced._new;
-    if (wasXfer) {
-      plannerTransferCache.push({...displaced, _zone:'xfer', _new:false});
-    } else {
-      plannerState.bench.push(displaced);
+  if (src.zone === 'xfer') {
+    // ── Budget check ──────────────────────────────────────────────────────────
+    const available = plannerBank + [...plannerState.xi,...plannerState.bench]
+      .filter(p=>p._new).reduce((s,p)=>s-p.now_cost,0)
+      + [...plannerState.xi,...plannerState.bench]
+      .filter(p=>p._outCost).reduce((s,p)=>s+p._outCost,0)
+      + tgtPlayer.now_cost; // we're selling tgtPlayer
+    if (src.player.now_cost > available) {
+      // Flash the pitch red briefly to signal can't afford
+      const pitch = document.getElementById('planner-pitch');
+      pitch.style.outline = '2px solid #ef4444';
+      setTimeout(() => pitch.style.outline = '', 1000);
+      // Show a warning in the pts bar
+      document.getElementById('planner-pts-bar').insertAdjacentHTML('beforeend',
+        `<div class="stat-card" id="afford-warn" style="border-color:rgba(239,68,68,0.4);grid-column:1/-1;">
+          <div class="label" style="color:#ef4444">Can\'t afford</div>
+          <div style="font-size:11px;color:#fca5a5;">£${(src.player.now_cost/10).toFixed(1)}m in — only £${(available/10).toFixed(1)}m available after selling ${tgtPlayer.web_name}</div>
+        </div>`);
+      setTimeout(() => document.getElementById('afford-warn')?.remove(), 3000);
+      return;
     }
-  } else if (src.zone === 'xfer' && tgtZone === 'bench') {
-    const displaced = {...plannerState.bench[tgtIdx], _zone:'xfer'};
-    plannerState.bench[tgtIdx] = {...src.player, _zone:'bench'};
-    plannerTransferCache = plannerTransferCache.filter(p => p.id !== src.player.id);
-    if (!displaced._new) plannerTransferCache.push({...displaced, _zone:'xfer', _new:false});
+
+    // ── Value check (4pt hit not worth it) ───────────────────────────────────
+    const xfersMade = plannerXferCount();
+    const isFree = xfersMade < plannerFTAvailable;
+    if (!isFree) {
+      const gain = plannerProjectedPts(src.player) - plannerProjectedPts(tgtPlayer);
+      if (gain <= 4) {
+        // Still allow it but warn
+        document.getElementById('planner-pts-bar').insertAdjacentHTML('beforeend',
+          `<div class="stat-card" id="value-warn" style="border-color:rgba(250,204,21,0.4);grid-column:1/-1;">
+            <div class="label" style="color:#facc15">Low value hit</div>
+            <div style="font-size:11px;color:#fde68a;">${src.player.web_name} only gains ${gain.toFixed(1)}pts over ${tgtPlayer.web_name} — 4pt hit ${gain<=0?'makes this a net loss':'barely breaks even'}. Drag back to undo.</div>
+          </div>`);
+        setTimeout(() => document.getElementById('value-warn')?.remove(), 4000);
+      }
+    }
+
+    // ── Perform the transfer ──────────────────────────────────────────────────
+    const outCost = tgtPlayer.now_cost; // sell price of displaced player
+    if (tgtZone === 'xi') {
+      plannerState.xi[tgtIdx] = {...src.player, _zone:'xi', _outCost: outCost};
+      const wasNew = tgtPlayer._new;
+      plannerTransferCache = plannerTransferCache.filter(p => p.id !== src.player.id);
+      if (wasNew) {
+        plannerTransferCache.push({...tgtPlayer, _zone:'xfer', _new:false, _outCost:0});
+      } else {
+        plannerState.bench.push({...tgtPlayer, _zone:'bench'});
+      }
+    } else {
+      plannerState.bench[tgtIdx] = {...src.player, _zone:'bench', _outCost: outCost};
+      const wasNew = tgtPlayer._new;
+      plannerTransferCache = plannerTransferCache.filter(p => p.id !== src.player.id);
+      if (!wasNew) plannerTransferCache.push({...tgtPlayer, _zone:'xfer', _new:false, _outCost:0});
+    }
+
+  } else {
+    // ── Internal swap (xi↔xi, bench↔bench, xi↔bench) — no budget/hit implications ──
+    if (src.zone === 'xi' && tgtZone === 'xi') {
+      plannerState.xi[src.idx] = tgtPlayer;
+      plannerState.xi[tgtIdx]  = src.player;
+    } else if (src.zone === 'bench' && tgtZone === 'xi') {
+      plannerState.xi[tgtIdx]     = {...src.player, _zone:'xi'};
+      plannerState.bench[src.idx] = {...tgtPlayer, _zone:'bench'};
+    } else if (src.zone === 'xi' && tgtZone === 'bench') {
+      plannerState.bench[tgtIdx] = {...src.player, _zone:'bench'};
+      plannerState.xi[src.idx]   = {...tgtPlayer, _zone:'xi'};
+    } else if (src.zone === 'bench' && tgtZone === 'bench') {
+      plannerState.bench[src.idx] = tgtPlayer;
+      plannerState.bench[tgtIdx]  = src.player;
+    }
   }
 
   plannerRenderAll();
 }
+
 
 // Hook planner init into the data load — called at end of renderAll above
 

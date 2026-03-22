@@ -216,12 +216,34 @@ input[type="text"]:focus{border-color:var(--green);}
   </div>
   <div class="hint">Public data — no login required.</div>
   <div class="error-box" id="error-box"></div>
+  <div id="cookie-guide" style="display:none;margin-top:20px;background:var(--panel2);border:1px solid rgba(0,255,135,0.2);border-radius:8px;padding:16px;text-align:left;">
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:1px;color:var(--green);margin-bottom:8px;">Fix: Add FPL Cookies to Vercel</div>
+    <div style="font-size:12px;color:var(--muted);line-height:1.8;">
+      FPL is blocking anonymous requests. You need to add your session cookies once — they last weeks.<br><br>
+      <strong style="color:var(--text);">Step 1</strong> — Open <a href="https://fantasy.premierleague.com" target="_blank" style="color:var(--green)">fantasy.premierleague.com</a> and log in.<br>
+      <strong style="color:var(--text);">Step 2</strong> — Press <code style="background:var(--panel);padding:1px 5px;border-radius:3px;color:var(--green)">F12</code> to open DevTools → go to the <strong style="color:var(--text)">Console</strong> tab.<br>
+      <strong style="color:var(--text);">Step 3</strong> — Paste this and press Enter:<br>
+    </div>
+    <div style="background:var(--dark);border:1px solid var(--border);border-radius:5px;padding:10px;margin:8px 0;font-family:'DM Mono',monospace;font-size:10px;color:var(--green);word-break:break-all;">document.cookie.split(';').filter(c=>c.trim().match(/^(access_token|refresh_token|pl_profile)=/)).map(c=>c.trim()).join('\n')</div>
+    <div style="font-size:12px;color:var(--muted);line-height:1.8;">
+      <strong style="color:var(--text);">Step 4</strong> — Copy the output. You'll see something like:<br>
+      <span style="font-family:'DM Mono',monospace;font-size:10px;color:rgba(255,255,255,0.4);">access_token=eyJ...<br>refresh_token=eyJ...</span><br><br>
+      <strong style="color:var(--text);">Step 5</strong> — Go to your <a href="https://vercel.com/dashboard" target="_blank" style="color:var(--green)">Vercel dashboard</a> → your project → <strong style="color:var(--text)">Settings → Environment Variables</strong> and add:<br>
+    </div>
+    <div style="background:var(--dark);border:1px solid var(--border);border-radius:5px;padding:10px;margin:8px 0;font-family:'DM Mono',monospace;font-size:10px;line-height:2;color:rgba(255,255,255,0.6);">
+      <span style="color:var(--green)">FPL_ACCESS_TOKEN</span> = the value after <span style="color:var(--muted)">access_token=</span><br>
+      <span style="color:var(--green)">FPL_REFRESH_TOKEN</span> = the value after <span style="color:var(--muted)">refresh_token=</span>
+    </div>
+    <div style="font-size:12px;color:var(--muted);line-height:1.8;">
+      <strong style="color:var(--text);">Step 6</strong> — Redeploy on Vercel (Settings → Deployments → Redeploy), then reload this page.
+    </div>
+  </div>
 </div>
 
 <div class="loading" id="loading-panel">
   <div class="spinner"></div>
   <div class="loading-title">Loading squad data...</div>
-  <div class="loading-sub" id="loading-msg">Connecting to FPL API</div>
+  <div class="loading-sub" id="loading-msg">Connecting to FPL API — trying available proxies</div>
 </div>
 
 <div class="dashboard" id="dashboard">
@@ -349,7 +371,6 @@ input[type="text"]:focus{border-color:var(--green);}
 const VERCEL_PROXY = '/api/fpl';
 const FPL_BASE = 'https://fantasy.premierleague.com/api';
 
-// True only when actually hosted on Vercel (not GitHub Pages, not local file)
 const ON_VERCEL = window.location.hostname !== 'localhost' &&
                   !window.location.hostname.includes('github.io') &&
                   window.location.protocol !== 'file:' &&
@@ -359,41 +380,55 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 
 async function fetchFPL(path) {
   const direct = FPL_BASE + path;
+  const encoded = encodeURIComponent(direct);
 
-  // --- Strategy 1: Vercel proxy — only attempt if we're actually on Vercel ---
+  // --- Strategy 1: Vercel proxy (only on Vercel) ---
   if (ON_VERCEL) {
     try {
       const r = await fetch(`${VERCEL_PROXY}?path=${encodeURIComponent(path.replace(/^\//,''))}`, {
         headers: { 'Accept': 'application/json' }
       });
       if (r.ok) return r.json();
-      if (r.status === 403 || r.status === 429) {
-        const body = await r.json().catch(() => ({}));
-        console.warn(`Vercel proxy ${r.status}:`, body.hint || '');
-        // fall through to public proxies
-      }
-      // any other non-ok status — fall through
+      const body = await r.json().catch(() => ({}));
+      console.warn(`Vercel proxy ${r.status}:`, body.hint || '');
     } catch (e) {
       console.warn('Vercel proxy error:', e.message);
     }
   }
 
-  // --- Strategy 2: allorigins.win ---
+  // --- Strategy 2: Direct fetch (works in some browsers / deployments) ---
   try {
-    const r = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(direct), {
-      headers: { 'Accept': 'application/json' }
+    const r = await fetch(direct, {
+      headers: { 'Accept': 'application/json', 'Origin': 'https://fantasy.premierleague.com' },
+      credentials: 'omit',
     });
-    if (r.ok) return JSON.parse(await r.text());
-  } catch (e) {
-    console.warn('allorigins failed:', e.message);
-  }
-
-  // --- Strategy 3: corsproxy.io ---
-  try {
-    const r = await fetch('https://corsproxy.io/?' + encodeURIComponent(direct));
     if (r.ok) return r.json();
   } catch (e) {
-    console.warn('corsproxy failed:', e.message);
+    console.warn('Direct fetch failed:', e.message);
+  }
+
+  // --- Strategies 3–7: Public CORS proxies (tried in sequence) ---
+  const proxies = [
+    `https://api.allorigins.win/raw?url=${encoded}`,
+    `https://corsproxy.io/?${encoded}`,
+    `https://api.codetabs.com/v1/proxy?quest=${encoded}`,
+    `https://thingproxy.freeboard.io/fetch/${direct}`,
+    `https://proxy.cors.sh/${direct}`,
+  ];
+
+  for (const url of proxies) {
+    try {
+      const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      if (r.ok) {
+        const text = await r.text();
+        // Some proxies wrap in JSON, handle both
+        try { return JSON.parse(text); } catch { continue; }
+      }
+      console.warn(`Proxy failed (${r.status}):`, url.split('?')[0].split('/').slice(0,3).join('/'));
+    } catch (e) {
+      console.warn('Proxy error:', e.message);
+    }
+    await wait(150); // small gap between attempts
   }
 
   throw new Error(`Could not reach FPL API for ${path} — all proxies failed`);
@@ -412,7 +447,7 @@ function showTab(el,name){
   el.classList.add('active');
 }
 function showError(msg){const b=document.getElementById('error-box');b.style.display='block';b.textContent=msg;}
-function hideError(){document.getElementById('error-box').style.display='none';}
+function hideError(){document.getElementById('error-box').style.display='none';const g=document.getElementById('cookie-guide');if(g)g.style.display='none';}
 function setLoading(msg){document.getElementById('loading-msg').textContent=msg;}
 
 // fetchFPL defined above
@@ -436,6 +471,7 @@ async function fetchAndRender(){
   try{
     setLoading('Fetching league data...');
     bootstrapData=await fetchFPL('/bootstrap-static/');
+    if(!bootstrapData||!bootstrapData.events){throw new Error('Invalid data returned from FPL API');}
     const liveGW=bootstrapData.events.find(e=>e.is_current)||bootstrapData.events.find(e=>e.is_next);
     currentGW=liveGW?liveGW.id:38;
     document.getElementById('gw-badge').textContent='GW '+currentGW;
@@ -467,12 +503,19 @@ async function fetchAndRender(){
     document.getElementById('setup-panel').style.display='block';
     const is403=err.message&&err.message.includes('403');
     const is429=err.message&&err.message.includes('429');
+    const isProxyFail=err.message&&err.message.includes('all proxies failed');
     const msg=is403
-      ?'FPL blocked the request (403). Your Vercel proxy cookies may have expired — update FPL_ACCESS_TOKEN & FPL_REFRESH_TOKEN in Vercel environment variables, then redeploy.'
+      ?'FPL blocked the request (403). Your Vercel cookies may have expired — follow the setup guide below to refresh them.'
       :is429
       ?'FPL is rate-limiting requests (429). Wait a minute then try again.'
+      :isProxyFail
+      ?'FPL is blocking all proxy requests. Follow the setup guide below to add your session cookies to Vercel — this fixes it permanently.'
       :'Could not load data. Check your Team ID and try again. ('+err.message+')';
     showError(msg);
+    // Show cookie guide on Vercel when proxies fail
+    if(ON_VERCEL && (isProxyFail || is403)){
+      document.getElementById('cookie-guide').style.display='block';
+    }
   }
 }
 

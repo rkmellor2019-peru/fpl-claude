@@ -265,26 +265,57 @@ input[type="text"]:focus{border-color:var(--green);}
 </div>
 
 <script>
-// Call FPL API directly from browser via CORS proxy
-// allorigins.win proxies the request from a neutral IP
-const FPL_BASE='https://fantasy.premierleague.com/api';
-async function fetchFPL(path){
-  // Try direct first (works if FPL allows it), fallback to proxy
-  const direct=FPL_BASE+path;
-  const proxied='https://api.allorigins.win/raw?url='+encodeURIComponent(direct);
-  try{
-    const r=await fetch(proxied,{headers:{'Accept':'application/json'}});
-    if(!r.ok)throw new Error('HTTP '+r.status);
-    const text=await r.text();
-    return JSON.parse(text);
-  }catch(e){
-    // Second proxy fallback
-    const r2=await fetch('https://corsproxy.io/?'+encodeURIComponent(direct));
-    if(!r2.ok)throw new Error('HTTP '+r2.status);
-    return r2.json();
+// ─── API config ──────────────────────────────────────────────────────────────
+// VERCEL_PROXY: set this to your Vercel deployment URL, e.g.
+//   'https://your-project.vercel.app/api/fpl'
+// When set, all requests go through your authenticated Vercel proxy first,
+// falling back to public CORS proxies only if it fails.
+const VERCEL_PROXY = '/api/fpl'; // relative path works when hosted on same Vercel deployment
+const FPL_BASE = 'https://fantasy.premierleague.com/api';
+
+// Retry helper — waits ms before resolving
+const wait = ms => new Promise(r => setTimeout(r, ms));
+
+async function fetchFPL(path, retries = 2) {
+  const direct = FPL_BASE + path;
+
+  // --- Strategy 1: Vercel proxy (has auth cookies + smarter fingerprinting) ---
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    if (attempt > 0) await wait(400 * attempt);
+    try {
+      const r = await fetch(`${VERCEL_PROXY}?path=${encodeURIComponent(path.replace(/^\//,''))}`, {
+        headers: { 'Accept': 'application/json' }
+      });
+      if (r.ok) return r.json();
+      // On 403/429 note it but don't throw yet — fall through to public proxies
+      if (r.status === 403 || r.status === 429) {
+        const body = await r.json().catch(() => ({}));
+        console.warn(`Vercel proxy ${r.status} (attempt ${attempt+1}):`, body.hint || '');
+        if (attempt === retries) break; // exhausted retries, fall through
+      } else {
+        break; // non-retryable error, fall through immediately
+      }
+    } catch (e) {
+      console.warn('Vercel proxy error:', e.message);
+      break;
+    }
   }
+
+  // --- Strategy 2: allorigins.win public CORS proxy ---
+  try {
+    const r = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(direct), {
+      headers: { 'Accept': 'application/json' }
+    });
+    if (r.ok) return JSON.parse(await r.text());
+  } catch (e) {
+    console.warn('allorigins failed:', e.message);
+  }
+
+  // --- Strategy 3: corsproxy.io fallback ---
+  const r3 = await fetch('https://corsproxy.io/?' + encodeURIComponent(direct));
+  if (!r3.ok) throw new Error(`All proxies failed for ${path} (last status: ${r3.status})`);
+  return r3.json();
 }
-const PROXY='UNUSED';
 let bootstrapData=null,teamId=null,currentGW=null,snapshotText='',allFixtures=[],playerHistories={},picksData=null,allChipDefs=[
   {key:'wildcard',label:'Wildcard'},
   {key:'freehit',label:'Free Hit'},
@@ -352,7 +383,14 @@ async function fetchAndRender(){
   }catch(err){
     document.getElementById('loading-panel').style.display='none';
     document.getElementById('setup-panel').style.display='block';
-    showError('Could not load data. Check Team ID and try again. ('+err.message+')');
+    const is403=err.message&&err.message.includes('403');
+    const is429=err.message&&err.message.includes('429');
+    const msg=is403
+      ?'FPL blocked the request (403). Your Vercel proxy cookies may have expired — update FPL_ACCESS_TOKEN & FPL_REFRESH_TOKEN in Vercel environment variables, then redeploy.'
+      :is429
+      ?'FPL is rate-limiting requests (429). Wait a minute then try again.'
+      :'Could not load data. Check your Team ID and try again. ('+err.message+')';
+    showError(msg);
   }
 }
 

@@ -82,6 +82,9 @@ input[type="text"]:focus{border-color:var(--green);}
 .squad-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;margin-bottom:20px;}
 .squad-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;position:relative;overflow:hidden;}
 .squad-card.bench-card{opacity:0.65;border-style:dashed;}
+.filter-btn{background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--muted);cursor:pointer;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:500;padding:4px 12px;transition:all 0.15s;white-space:nowrap;}
+.filter-btn:hover{border-color:rgba(255,255,255,0.2);color:var(--text);}
+.filter-btn.active-filter{background:var(--green);border-color:var(--green);color:#000;}
 .squad-card-header{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
 .squad-card-pos{width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;}
 .squad-card-pos.gk{background:rgba(245,158,11,0.15);color:var(--gk);}
@@ -208,12 +211,19 @@ input[type="text"]:focus{border-color:var(--green);}
   <!-- PLAYERS & FORM TAB -->
   <div class="tab-content" id="tab-players">
     <div class="page">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-        <div class="section-title" style="margin:0;border:none;padding:0;">Player Cards — Form &amp; Next 3 GWs</div>
-        <div style="display:flex;gap:6px;">
-          <button onclick="filterCards('all')" id="filter-all" class="btn" style="font-size:11px;padding:5px 12px;background:var(--green);">All</button>
-          <button onclick="filterCards('xi')" id="filter-xi" class="btn" style="font-size:11px;padding:5px 12px;background:transparent;border:1px solid var(--border);color:var(--muted);">XI Only</button>
-          <button onclick="filterCards('bench')" id="filter-bench" class="btn" style="font-size:11px;padding:5px 12px;background:transparent;border:1px solid var(--border);color:var(--muted);">Bench</button>
+      <div style="margin-bottom:14px;">
+        <div class="section-title" style="margin-bottom:10px;">Player Cards &mdash; Form &amp; Next 3 GWs</div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;">
+          <span style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;">View:</span>
+          <button onclick="filterCards('all')" id="filter-all" class="filter-btn active-filter">All</button>
+          <button onclick="filterCards('xi')" id="filter-xi" class="filter-btn">XI Only</button>
+          <button onclick="filterCards('bench')" id="filter-bench" class="filter-btn">Bench</button>
+          <span style="width:1px;height:20px;background:var(--border);margin:0 6px;"></span>
+          <span style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;">Position:</span>
+          <button onclick="filterCards('pos-gk')" id="filter-pos-gk" class="filter-btn" style="border-color:rgba(245,158,11,0.35);color:var(--gk);">Goalkeeper</button>
+          <button onclick="filterCards('pos-def')" id="filter-pos-def" class="filter-btn" style="border-color:rgba(59,130,246,0.35);color:var(--def);">Defender</button>
+          <button onclick="filterCards('pos-mid')" id="filter-pos-mid" class="filter-btn" style="border-color:rgba(16,185,129,0.35);color:var(--mid);">Midfielder</button>
+          <button onclick="filterCards('pos-fwd')" id="filter-pos-fwd" class="filter-btn" style="border-color:rgba(239,68,68,0.35);color:var(--fwd);">Attacker</button>
         </div>
       </div>
       <div class="squad-cards" id="squad-cards"></div>
@@ -515,7 +525,20 @@ function renderAll(entry,picks,transfers,history,gwFixtures){
     const capStrip=(pick.is_captain||pick.is_vice_captain)?`<div class="cap-strip">${pick.is_captain?'Captain this week':'Vice-captain this week'} · Consider based on GW${currentGW} fixture: ${getFixStr(pl.team,gwFixtures)||'No fixture'}</div>`:'';
     const scorePct=Math.min(100,Math.round((score/12)*100));
 
-    return`<div class="squad-card ${isBench?'bench-card':''}" data-role="${isBench?'bench':'xi'}">
+    // Find best squad alternative (same pos, in squad, not this player)
+    const squadAlt=picks.picks
+      .filter(p=>p.element!==pick.element)
+      .map(p=>{const alt=getPlayer(p.element);if(!alt||alt.element_type!==pl.element_type)return null;const{score:as}=playerScore(alt,currentGW,3);return{pl:alt,score:as,isBench:p.position>11,team:getTeam(alt.team)};})
+      .filter(Boolean).sort((a,b)=>b.score-a.score)[0];
+    // Find best transfer target (same pos, affordable, not in squad)
+    const sellPx=pl.now_cost;
+    const budgetTenths=sellPx+Math.floor(bank*10);
+    const xferAlt=bootstrapData.elements
+      .filter(e=>e.element_type===pl.element_type&&e.id!==pl.id&&e.now_cost<=budgetTenths&&e.status==='a'&&!picks.picks.some(p=>p.element===e.id))
+      .map(e=>{const{score:xs}=playerScore(e,currentGW,3);return{pl:e,score:xs,team:getTeam(e.team)};})
+      .sort((a,b)=>b.score-a.score)[0];
+
+    return`<div class="squad-card ${isBench?'bench-card':''}" data-role="${isBench?'bench':'xi'}" data-pos="pos-${pos}">
       <div class="squad-card-header">
         <div class="squad-card-pos ${pos}">${posLabel(pl.element_type)}</div>
         <div class="squad-card-info">
@@ -534,6 +557,24 @@ function renderAll(entry,picks,transfers,history,gwFixtures){
         <div class="score-val ${scoreClass}">${score.toFixed(1)}</div>
       </div>
       ${injStrip}${capStrip}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
+        <div style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:6px;padding:7px 9px;">
+          <div style="font-size:9px;color:var(--def);text-transform:uppercase;letter-spacing:0.7px;font-weight:600;margin-bottom:4px;">In your squad</div>
+          ${squadAlt?`
+            <div style="font-size:12px;font-weight:500;color:var(--text);">${squadAlt.pl.web_name}</div>
+            <div style="font-size:10px;color:var(--muted);">${squadAlt.team?squadAlt.team.short_name:''} · £${(squadAlt.pl.now_cost/10).toFixed(1)}m · ${squadAlt.isBench?'Bench':'XI'}</div>
+            <div style="font-size:10px;color:var(--muted);">Form: ${parseFloat(squadAlt.pl.form).toFixed(1)} · Score: <span style="color:${squadAlt.score>score?'var(--green)':'#ef4444'}">${squadAlt.score.toFixed(1)}</span>${squadAlt.score>score?' ↑ Better':' ↓ Weaker'}</div>
+          `:'<div style="font-size:10px;color:var(--muted);">No same-position option</div>'}
+        </div>
+        <div style="background:rgba(0,255,135,0.04);border:1px solid rgba(0,255,135,0.15);border-radius:6px;padding:7px 9px;">
+          <div style="font-size:9px;color:var(--green);text-transform:uppercase;letter-spacing:0.7px;font-weight:600;margin-bottom:4px;">Transfer target</div>
+          ${xferAlt?`
+            <div style="font-size:12px;font-weight:500;color:var(--text);">${xferAlt.pl.web_name}</div>
+            <div style="font-size:10px;color:var(--muted);">${xferAlt.team?xferAlt.team.short_name:''} · £${(xferAlt.pl.now_cost/10).toFixed(1)}m</div>
+            <div style="font-size:10px;color:var(--muted);">Form: ${parseFloat(xferAlt.pl.form).toFixed(1)} · Score: <span style="color:${xferAlt.score>score?'var(--green)':'#ef4444'}">${xferAlt.score.toFixed(1)}</span>${xferAlt.score>score?' ↑ Upgrade':'  Similar'}</div>
+          `:'<div style="font-size:10px;color:var(--muted);">No affordable option</div>'}
+        </div>
+      </div>
     </div>`;
   }).join('');
 
@@ -904,13 +945,26 @@ ${recentTransfers.length?recentTransfers.join('\n'):'  None'}
 }
 
 function filterCards(type){
+  const isPosFilter=type.startsWith('pos-');
   document.querySelectorAll('.squad-card').forEach(c=>{
     const role=c.dataset.role;
-    c.style.display=(type==='all'||role===type)?'':'none';
+    const pos=c.dataset.pos;
+    if(isPosFilter){
+      c.style.display=pos===type?'':'none';
+    } else {
+      c.style.display=(type==='all'||role===type)?'':'none';
+    }
   });
-  ['all','xi','bench'].forEach(t=>{
-    const btn=document.getElementById('filter-'+t);
-    if(btn){btn.style.background=t===type?'var(--green)':'transparent';btn.style.color=t===type?'#000':'var(--muted)';}
+  // Reset all button states
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active-filter'));
+  const active=document.getElementById('filter-'+type);
+  if(active)active.classList.add('active-filter');
+  // Restore position button colors when not active
+  ['pos-gk','pos-def','pos-mid','pos-fwd'].forEach(p=>{
+    const b=document.getElementById('filter-'+p);
+    if(!b)return;
+    const colorMap={'pos-gk':'var(--gk)','pos-def':'var(--def)','pos-mid':'var(--mid)','pos-fwd':'var(--fwd)'};
+    if(type!==p){b.style.color=colorMap[p];}else{b.style.color='#000';}
   });
 }
 

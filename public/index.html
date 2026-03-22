@@ -265,7 +265,26 @@ input[type="text"]:focus{border-color:var(--green);}
 </div>
 
 <script>
-const PROXY='/api/fpl?path=';
+// Call FPL API directly from browser via CORS proxy
+// allorigins.win proxies the request from a neutral IP
+const FPL_BASE='https://fantasy.premierleague.com/api';
+async function fetchFPL(path){
+  // Try direct first (works if FPL allows it), fallback to proxy
+  const direct=FPL_BASE+path;
+  const proxied='https://api.allorigins.win/raw?url='+encodeURIComponent(direct);
+  try{
+    const r=await fetch(proxied,{headers:{'Accept':'application/json'}});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const text=await r.text();
+    return JSON.parse(text);
+  }catch(e){
+    // Second proxy fallback
+    const r2=await fetch('https://corsproxy.io/?'+encodeURIComponent(direct));
+    if(!r2.ok)throw new Error('HTTP '+r2.status);
+    return r2.json();
+  }
+}
+const PROXY='UNUSED';
 let bootstrapData=null,teamId=null,currentGW=null,snapshotText='',allFixtures=[],playerHistories={},picksData=null,allChipDefs=[
   {key:'wildcard',label:'Wildcard'},
   {key:'freehit',label:'Free Hit'},
@@ -283,11 +302,7 @@ function showError(msg){const b=document.getElementById('error-box');b.style.dis
 function hideError(){document.getElementById('error-box').style.display='none';}
 function setLoading(msg){document.getElementById('loading-msg').textContent=msg;}
 
-async function fetchFPL(path){
-  const res=await fetch(PROXY+encodeURIComponent(path));
-  if(!res.ok)throw new Error('HTTP '+res.status);
-  return JSON.parse(await res.text());
-}
+// fetchFPL defined above
 
 async function loadTeam(){
   hideError();

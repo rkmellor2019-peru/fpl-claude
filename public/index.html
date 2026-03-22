@@ -378,11 +378,23 @@ function playerScore(pl,gwStart,gwCount){
   return{score,form,avgFdr:avgFdr.toFixed(1),fixes,validFixes};
 }
 
-// Get last N GW points from player history
-function getRecentPoints(playerId,n){
+// Get full season history + stats for a player
+function getPlayerStats(playerId){
   const hist=playerHistories[playerId];
-  if(!hist||!hist.history)return[];
-  return hist.history.slice(-n).map(h=>h.total_points);
+  if(!hist||!hist.history||!hist.history.length)return{pts:[],labels:[],avg:0,total:0,projection:0,gwsPlayed:0};
+  const allGWs=hist.history;
+  const pts=allGWs.map(h=>h.total_points);
+  const labels=allGWs.map(h=>'GW'+h.round);
+  const total=pts.reduce((a,b)=>a+b,0);
+  const gwsPlayed=pts.length;
+  const avg=gwsPlayed?total/gwsPlayed:0;
+  const gwsLeft=38-currentGW;
+  const projection=Math.round(total+(avg*gwsLeft));
+  return{pts,labels,avg:parseFloat(avg.toFixed(1)),total,projection,gwsPlayed};
+}
+function getRecentPoints(playerId,n){
+  const{pts}=getPlayerStats(playerId);
+  return pts.slice(-n);
 }
 
 function statusBadge(pl){
@@ -471,12 +483,12 @@ function renderAll(entry,picks,transfers,history,gwFixtures){
     const isBench=pick.position>11;
     const price=(pl.now_cost/10).toFixed(1);
     const pos=posClass(pl.element_type);
-    const recentPts=getRecentPoints(pick.element,5);
+    const stats=getPlayerStats(pick.element);
     const fixes3=getPlayerFixtures(pl.team,currentGW,3);
     const {score,form,avgFdr}=playerScore(pl,currentGW,3);
     const scoreClass=formClass(score/2);
     const chartId='chart-'+pick.element+'-'+idx;
-    chartIds.push({id:chartId,pts:recentPts,playerId:pick.element});
+    chartIds.push({id:chartId,stats,playerId:pick.element});
     const cap=pick.is_captain?' <span style="background:var(--gk);color:#000;font-size:9px;padding:1px 4px;border-radius:2px;font-weight:700">©</span>':'';
     const vice=pick.is_vice_captain?' <span style="background:#555;color:#fff;font-size:9px;padding:1px 4px;border-radius:2px;">v</span>':'';
 
@@ -508,12 +520,12 @@ function renderAll(entry,picks,transfers,history,gwFixtures){
         <div class="squad-card-pos ${pos}">${posLabel(pl.element_type)}</div>
         <div class="squad-card-info">
           <div class="squad-card-name">${pl.web_name}${cap}${vice} ${statusBadge(pl)}</div>
-          <div class="squad-card-meta">${team?team.name:''} · Season: ${pl.total_points}pts</div>
+          <div class="squad-card-meta">${team?team.name:''} · ${stats.gwsPlayed} GWs · Avg: <strong style="color:var(--text)">${stats.avg}pts</strong> · Proj: <strong style="color:var(--green)">${stats.projection}pts</strong></div>
         </div>
         <div class="squad-card-price">£${price}m</div>
       </div>
-      <div class="form-graph-wrap">
-        <canvas id="${chartId}" height="50"></canvas>
+      <div class="form-graph-wrap" style="height:90px;margin-bottom:6px;">
+        <canvas id="${chartId}"></canvas>
       </div>
       <div class="gw-fixtures">${fdrBoxes}</div>
       <div class="squad-card-score">
@@ -527,37 +539,122 @@ function renderAll(entry,picks,transfers,history,gwFixtures){
 
   document.getElementById('squad-cards').innerHTML=cardHtml;
 
-  // Render mini charts
+  // Render enhanced charts with season avg line + axes
   setTimeout(()=>{
-    chartIds.forEach(({id,pts})=>{
+    chartIds.forEach(({id,stats})=>{
       const canvas=document.getElementById(id);
-      if(!canvas||!pts.length)return;
-      const labels=pts.map((_,i)=>'GW'+(currentGW-pts.length+i));
+      if(!canvas||!stats.pts.length)return;
+      const pts=stats.pts;
+      const avg=stats.avg;
+      const maxVal=Math.max(...pts,avg,2)+2;
+      // Color each point: green>=avg, amber=within 2, red<avg-2
+      const pointColors=pts.map(p=>p>=avg?'#00ff87':p>=avg-2?'#facc15':'#ef4444');
+      const pointSizes=pts.map(p=>p>=10?5:p>=6?4:3);
       new Chart(canvas,{
         type:'line',
         data:{
-          labels,
-          datasets:[{
-            data:pts,
-            borderColor:'#00ff87',
-            backgroundColor:'rgba(0,255,135,0.08)',
-            borderWidth:1.5,
-            pointRadius:2.5,
-            pointBackgroundColor:'#00ff87',
-            tension:0.3,
-            fill:true
-          }]
+          labels:stats.labels,
+          datasets:[
+            {
+              label:'GW Points',
+              data:pts,
+              borderColor:'#00ff87',
+              backgroundColor:(ctx)=>{
+                const chart=ctx.chart;
+                const{ctx:c,chartArea}=chart;
+                if(!chartArea)return'rgba(0,255,135,0.05)';
+                const gradient=c.createLinearGradient(0,chartArea.top,0,chartArea.bottom);
+                gradient.addColorStop(0,'rgba(0,255,135,0.25)');
+                gradient.addColorStop(1,'rgba(0,255,135,0.01)');
+                return gradient;
+              },
+              borderWidth:2,
+              pointRadius:pointSizes,
+              pointBackgroundColor:pointColors,
+              pointBorderColor:pointColors,
+              pointBorderWidth:0,
+              tension:0.35,
+              fill:true,
+              order:2
+            },
+            {
+              label:'Season avg ('+avg+'pts)',
+              data:Array(pts.length).fill(avg),
+              borderColor:'rgba(250,204,21,0.6)',
+              borderWidth:1.5,
+              borderDash:[4,3],
+              pointRadius:0,
+              fill:false,
+              tension:0,
+              order:1
+            }
+          ]
         },
         options:{
           responsive:true,maintainAspectRatio:false,
-          plugins:{legend:{display:false},tooltip:{
-            callbacks:{label:ctx=>'GW pts: '+ctx.raw},
-            backgroundColor:'rgba(0,0,0,0.8)',titleColor:'#888',bodyColor:'#00ff87',
-            displayColors:false,padding:6,cornerRadius:4
-          }},
+          animation:{duration:400},
+          plugins:{
+            legend:{
+              display:true,
+              position:'top',
+              align:'end',
+              labels:{
+                color:'rgba(255,255,255,0.35)',
+                font:{size:9},
+                boxWidth:12,
+                boxHeight:2,
+                padding:8,
+                usePointStyle:true,
+                pointStyle:'line'
+              }
+            },
+            tooltip:{
+              callbacks:{
+                title:ctx=>ctx[0].label,
+                label:ctx=>{
+                  if(ctx.datasetIndex===1)return'Avg: '+avg+'pts';
+                  const p=ctx.raw;
+                  const diff=parseFloat((p-avg).toFixed(1));
+                  return'Points: '+p+' ('+(diff>=0?'+':'')+diff+' vs avg)';
+                }
+              },
+              backgroundColor:'rgba(10,10,10,0.9)',
+              titleColor:'rgba(255,255,255,0.5)',
+              bodyColor:'#00ff87',
+              displayColors:true,
+              padding:8,
+              cornerRadius:5
+            }
+          },
           scales:{
-            x:{display:false},
-            y:{display:false,min:0}
+            x:{
+              display:true,
+              ticks:{
+                color:'rgba(255,255,255,0.25)',
+                font:{size:8},
+                maxRotation:0,
+                maxTicksLimit:6,
+                callback:(val,i)=>{
+                  if(stats.labels.length<=8)return stats.labels[i];
+                  return i%Math.ceil(stats.labels.length/6)===0?stats.labels[i]:'';
+                }
+              },
+              grid:{color:'rgba(255,255,255,0.03)'},
+              border:{color:'rgba(255,255,255,0.06)'}
+            },
+            y:{
+              display:true,
+              min:0,
+              max:maxVal,
+              ticks:{
+                color:'rgba(255,255,255,0.3)',
+                font:{size:8},
+                stepSize:2,
+                callback:v=>v+'pts'
+              },
+              grid:{color:'rgba(255,255,255,0.04)'},
+              border:{color:'rgba(255,255,255,0.06)'}
+            }
           }
         }
       });
@@ -635,57 +732,104 @@ function renderAll(entry,picks,transfers,history,gwFixtures){
     </div>
   `;
 
-  // Transfer recommendations — worst score players vs best available replacements
-  const worstXI=starters.map(pick=>{
+  // Transfer engine — accounts for free transfers, hit cost, squad sell value
+  // Selling price = min(buy price, current price) — FPL profit lock rule
+  function getSellPrice(pl){
+    const hist=playerHistories[pl.id];
+    if(!hist||!hist.history||!hist.history.length)return pl.now_cost;
+    // We don't have buy price directly, use now_cost as sell price (conservative)
+    return pl.now_cost;
+  }
+
+  // FT available — read from picks metadata
+  const ftAvailable=picks.entry_history.event_transfers_cost>0?1:
+    Math.min(2,2-(picks.entry_history.event_transfers||0)+1);
+
+  function findReplacements(pl,isFreeTrans){
+    const sellPrice=getSellPrice(pl);
+    const budget=sellPrice+Math.floor(bank*10); // total budget in tenths
+    const hitCost=isFreeTrans?0:4; // 4pt hit per extra transfer
+    return bootstrapData.elements
+      .filter(e=>{
+        if(e.element_type!==pl.element_type)return false;
+        if(e.id===pl.id)return false;
+        if(e.now_cost>budget)return false;
+        if(e.status==='u')return false;
+        // Exclude players already in squad
+        if(picks.picks.some(p=>p.element===e.id))return false;
+        return true;
+      })
+      .map(e=>{
+        const{score}=playerScore(e,currentGW,3);
+        const netScore=score-(hitCost/2); // penalise hit transfers slightly
+        return{pl:e,score,netScore,cost:e.now_cost,change:e.now_cost-sellPrice,team:getTeam(e.team)};
+      })
+      .sort((a,b)=>b.netScore-a.netScore)
+      .slice(0,3);
+  }
+
+  // Score each XI player — worst 3 are transfer targets
+  const scoredXI=starters.map((pick,i)=>{
     const pl=getPlayer(pick.element);
     if(!pl)return null;
     const{score,form,avgFdr}=playerScore(pl,currentGW,3);
-    return{pick,pl,score,form,avgFdr,team:getTeam(pl.team)};
-  }).filter(Boolean).sort((a,b)=>a.score-b.score).slice(0,3);
+    const stats=getPlayerStats(pick.element);
+    return{pick,pl,score,form,avgFdr,team:getTeam(pl.team),stats};
+  }).filter(Boolean).sort((a,b)=>a.score-b.score);
+  const worstXI2=scoredXI.slice(0,3);
 
-  // Find top value replacements from same position in bootstrap (top 30 by pts, same pos, affordable)
-  function findReplacements(pl,budget){
-    const maxCost=pl.now_cost+Math.floor(bank*10)+10;
-    return bootstrapData.elements
-      .filter(e=>e.element_type===pl.element_type&&e.id!==pl.id&&e.now_cost<=maxCost&&e.status==='a')
-      .map(e=>{
-        const{score}=playerScore(e,currentGW,3);
-        return{pl:e,score,team:getTeam(e.team)};
-      })
-      .sort((a,b)=>b.score-a.score)
-      .slice(0,2);
+  function fdrMiniBoxes(fixes,count){
+    return fixes.slice(0,count).map(f=>f
+      ?`<div class="fdr-box fdr-${f.diff}" style="width:24px;height:20px;font-size:8px">${f.diff}</div>`
+      :`<div class="fdr-box fdr-blank" style="width:24px;height:20px;font-size:8px">—</div>`
+    ).join('');
   }
 
   document.getElementById('transfer-recs').innerHTML=`
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:10px;">
-    ${worstXI.map(c=>{
-      const reps=findReplacements(c.pl,bank);
-      const repHtml=reps.map(r=>{
-        const fixes3=getPlayerFixtures(r.pl.team,currentGW,3);
-        const fdrMini=fixes3.slice(0,3).map(f=>f?`<div class="fdr-box fdr-${f.diff}" style="width:22px;height:18px;font-size:8px">${f.diff}</div>`:`<div class="fdr-box fdr-blank" style="width:22px;height:18px;font-size:8px">—</div>`).join('');
-        return`<div style="background:var(--panel2);border-radius:5px;padding:8px 10px;margin-top:6px;display:flex;align-items:center;gap:8px;">
-          <div style="flex:1">
-            <div style="font-size:12px;font-weight:500;color:var(--green)">→ ${r.pl.web_name} <span style="color:var(--muted);font-weight:400">${r.team?r.team.short_name:''}</span></div>
-            <div style="font-size:10px;color:var(--muted)">£${(r.pl.now_cost/10).toFixed(1)}m · Form: ${parseFloat(r.pl.form).toFixed(1)} · Score: ${r.score.toFixed(1)}</div>
+    <div style="background:var(--panel2);border-radius:6px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+      <div style="font-size:12px;color:var(--muted)">Free transfers: <strong style="color:var(--green)">${ftAvailable}</strong></div>
+      <div style="font-size:12px;color:var(--muted)">Bank: <strong style="color:var(--green)">£${bank.toFixed(1)}m</strong></div>
+      <div style="font-size:12px;color:var(--muted)">Squad value: <strong style="color:var(--text)">£${teamValue.toFixed(1)}m</strong></div>
+      <div style="font-size:12px;color:var(--muted)">Extra transfer cost: <strong style="color:#ef4444">-4pts each</strong></div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px;">
+    ${worstXI2.map((c,i)=>{
+      const isFree=i<ftAvailable;
+      const reps=findReplacements(c.pl,isFree);
+      const outFixes=getPlayerFixtures(c.pl.team,currentGW,3);
+      const repHtml=reps.map((r,ri)=>{
+        const inFixes=getPlayerFixtures(r.pl.team,currentGW,3);
+        const costDiff=r.change/10;
+        const costStr=costDiff>0?`+£${costDiff.toFixed(1)}m more`:(costDiff<0?`£${Math.abs(costDiff).toFixed(1)}m cheaper`:`Same price`);
+        const isUpgrade=r.pl.now_cost>c.pl.now_cost;
+        return`<div style="background:${ri===0?'rgba(0,255,135,0.04)':'var(--dark)'};border:1px solid ${ri===0?'rgba(0,255,135,0.15)':'rgba(255,255,255,0.05)'};border-radius:6px;padding:8px 10px;margin-top:6px;">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+            <span style="color:var(--green);font-size:11px;font-weight:600">↑ IN: ${r.pl.web_name}</span>
+            <span style="font-size:10px;color:var(--muted)">${r.team?r.team.short_name:''}</span>
+            ${ri===0?'<span style="margin-left:auto;font-size:9px;background:rgba(0,255,135,0.12);color:var(--green);padding:1px 5px;border-radius:3px;">Best pick</span>':''}
           </div>
-          <div style="display:flex;gap:2px">${fdrMini}</div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <div style="font-size:10px;color:var(--muted)">£${(r.pl.now_cost/10).toFixed(1)}m <span style="color:${costDiff>0?'#ef4444':'#a3e635'}">(${costStr})</span></div>
+            <div style="font-size:10px;color:var(--muted)">Form: <strong style="color:var(--text)">${parseFloat(r.pl.form).toFixed(1)}</strong></div>
+            <div style="font-size:10px;color:var(--muted)">3GW score: <strong style="color:var(--green)">${r.score.toFixed(1)}</strong></div>
+            <div style="display:flex;gap:2px;margin-left:auto">${fdrMiniBoxes(inFixes,3)}</div>
+          </div>
         </div>`;
       }).join('');
-
-      const fixes3=getPlayerFixtures(c.pl.team,currentGW,3);
-      const fdrMini=fixes3.slice(0,3).map(f=>f?`<div class="fdr-box fdr-${f.diff}" style="width:22px;height:18px;font-size:8px">${f.diff}</div>`:`<div class="fdr-box fdr-blank" style="width:22px;height:18px;font-size:8px">—</div>`).join('');
-
-      return`<div class="strategy-card">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <span style="color:#ef4444;font-size:13px">↓ OUT</span>
+      return`<div class="strategy-card" style="border-color:${isFree?'rgba(0,255,135,0.12)':'rgba(239,68,68,0.12)'}">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          <span style="font-size:10px;padding:2px 7px;border-radius:3px;font-weight:600;background:${isFree?'rgba(0,255,135,0.1)':'rgba(239,68,68,0.1)'};color:${isFree?'var(--green)':'#ef4444'}">${isFree?'FREE TRANSFER':'COSTS 4PTS'}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="color:#ef4444;font-size:12px;font-weight:600">↓ OUT</span>
           <div style="flex:1">
             <div style="font-weight:600;font-size:13px">${c.pl.web_name} <span style="font-size:10px;color:var(--muted)">${c.team?c.team.short_name:''} · £${(c.pl.now_cost/10).toFixed(1)}m</span></div>
-            <div style="font-size:10px;color:var(--muted)">Form: ${c.form.toFixed(1)} · Score: <span style="color:#ef4444">${c.score.toFixed(1)}</span></div>
+            <div style="font-size:10px;color:var(--muted)">Season avg: ${c.stats.avg}pts · 3GW score: <span style="color:#ef4444">${c.score.toFixed(1)}</span> · Form: ${c.form.toFixed(1)}</div>
           </div>
-          <div style="display:flex;gap:2px">${fdrMini}</div>
+          <div style="display:flex;gap:2px">${fdrMiniBoxes(outFixes,3)}</div>
         </div>
-        <div style="font-size:10px;color:var(--muted);margin-bottom:4px">Suggested replacements (within budget):</div>
-        ${repHtml||'<div style="font-size:11px;color:var(--muted)">No affordable upgrades found</div>'}
+        <div style="font-size:10px;color:var(--muted);margin-bottom:2px">Top replacements (affordable, not in squad):</div>
+        ${repHtml||'<div style="font-size:11px;color:var(--muted);padding:6px 0">No affordable upgrades found in budget</div>'}
       </div>`;
     }).join('')}
     </div>

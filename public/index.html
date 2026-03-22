@@ -276,6 +276,19 @@
   }
   .copy-btn:hover { background: rgba(0,255,135,0.1); }
 
+  .switch-btn {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 6px;
+    color: var(--muted);
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    padding: 8px 14px;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .switch-btn:hover { border-color: var(--green); color: var(--green); }
+
   .refresh-btn {
     background: transparent;
     border: 1px solid var(--border);
@@ -306,7 +319,10 @@
     <div class="logo">FPL <span>CLAUDE</span></div>
     <div class="subtitle">AI-Managed Fantasy Team</div>
   </div>
-  <div class="gw-badge" id="gw-badge">GW —</div>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <button class="switch-btn" id="switch-btn" onclick="switchTeam()" style="display:none;">⇄ Switch Team</button>
+    <div class="gw-badge" id="gw-badge">GW —</div>
+  </div>
 </header>
 
 <div class="setup" id="setup-panel">
@@ -584,6 +600,7 @@ ${recentTransfers.length ? recentTransfers.join('\n') : '  None'}
 
   document.getElementById('loading-panel').style.display = 'none';
   document.getElementById('dashboard').style.display = 'block';
+  document.getElementById('switch-btn').style.display = 'block';
 }
 
 function copySnapshot() {
@@ -593,6 +610,18 @@ function copySnapshot() {
     btn.textContent = 'COPIED ✓';
     setTimeout(() => btn.textContent = orig, 2000);
   });
+}
+
+function switchTeam() {
+  localStorage.removeItem('fpl_team_id');
+  teamId = null;
+  bootstrapData = null;
+  document.getElementById('team-id-input').value = '';
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('switch-btn').style.display = 'none';
+  document.getElementById('gw-badge').textContent = 'GW —';
+  document.getElementById('setup-panel').style.display = 'block';
+  hideError();
 }
 
 // Auto-load if saved

@@ -152,7 +152,45 @@ input[type="text"]:focus{border-color:var(--green);}
 .copy-btn:hover{background:rgba(0,255,135,0.08);}
 .refresh-btn{background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--muted);cursor:pointer;font-size:11px;padding:6px 12px;margin-left:7px;transition:all 0.15s;}
 .refresh-btn:hover{border-color:var(--green);color:var(--green);}
-@media(max-width:600px){.strategy-grid{grid-template-columns:1fr;}.player{width:64px;}.pos-row{gap:3px;}.page{padding:12px 14px;}.squad-cards{grid-template-columns:1fr;}}
+/* PLANNER */
+.pln-card{background:rgba(0,0,0,0.65);border:1px solid rgba(255,255,255,0.1);border-radius:7px;padding:6px 5px;text-align:center;cursor:grab;transition:border-color 0.15s,transform 0.1s;position:relative;min-width:72px;}
+.pln-card:active{cursor:grabbing;}
+.pln-card.dragging{opacity:0.4;transform:scale(0.95);}
+.pln-card.drag-over{border-color:var(--green);box-shadow:0 0 0 2px rgba(0,255,135,0.25);}
+.pln-card.invalid-over{border-color:#ef4444;box-shadow:0 0 0 2px rgba(239,68,68,0.2);}
+.pln-card.captain{border-color:var(--gk);}
+.pln-card.transferred-in{border-color:var(--green);border-style:dashed;}
+.pln-card .pln-name{font-size:9px;font-weight:600;color:#fff;line-height:1.2;margin-bottom:1px;}
+.pln-card .pln-pts{font-family:'DM Mono',monospace;font-size:11px;color:var(--green);font-weight:500;}
+.pln-card .pln-price{font-family:'DM Mono',monospace;font-size:8px;color:rgba(255,255,255,0.4);}
+.pln-card .pln-fix{font-size:7px;color:rgba(255,255,255,0.35);margin-top:1px;}
+.pln-card .pln-badge{font-size:6px;font-weight:700;border-radius:2px;padding:1px 3px;display:inline-block;margin-top:1px;}
+.pln-card .cap-b{background:var(--gk);color:#000;}
+.pln-card .inj-b{background:#ef4444;color:#fff;}
+.pln-card .new-b{background:var(--green);color:#000;}
+.pln-pos-row{display:flex;justify-content:center;gap:5px;margin-bottom:10px;position:relative;z-index:1;}
+.pln-pos-label{text-align:center;font-size:8px;color:rgba(255,255,255,0.25);letter-spacing:1px;text-transform:uppercase;margin-bottom:5px;}
+.formation-btn{background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--muted);font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:1px;padding:4px 10px;cursor:pointer;transition:all 0.15s;white-space:nowrap;}
+.formation-btn:hover{border-color:var(--green);color:var(--green);}
+.formation-btn.active{background:var(--green);border-color:var(--green);color:#000;}
+.bench-plr{background:var(--panel2);border:1px solid var(--border);border-radius:7px;padding:7px 10px;display:flex;align-items:center;gap:8px;cursor:grab;transition:border-color 0.15s;}
+.bench-plr:active{cursor:grabbing;}
+.bench-plr.dragging{opacity:0.4;}
+.bench-plr.drag-over{border-color:var(--green);}
+.bench-plr .b-pos{width:24px;height:24px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;flex-shrink:0;}
+.bench-plr .b-name{font-size:12px;font-weight:500;color:var(--text);}
+.bench-plr .b-meta{font-size:10px;color:var(--muted);}
+.bench-plr .b-pts{font-family:'DM Mono',monospace;font-size:11px;color:var(--green);margin-left:auto;flex-shrink:0;}
+.xfer-plr{background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:6px 9px;display:flex;align-items:center;gap:7px;cursor:grab;transition:border-color 0.15s;font-size:11px;}
+.xfer-plr:active{cursor:grabbing;}
+.xfer-plr.dragging{opacity:0.4;}
+.xfer-plr .x-pos{width:20px;height:20px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;flex-shrink:0;}
+.xfer-plr .x-name{font-weight:500;color:var(--text);flex:1;}
+.xfer-plr .x-meta{font-size:10px;color:var(--muted);}
+.xfer-plr .x-pts{font-family:'DM Mono',monospace;font-size:10px;color:var(--green);margin-left:auto;flex-shrink:0;}
+.squad-card.squad-card-injured{border-color:rgba(239,68,68,0.4);box-shadow:0 0 0 1px rgba(239,68,68,0.08);}
+@media(max-width:700px){#tab-planner .page>div:nth-child(4){grid-template-columns:1fr;}}
+
 </style>
 </head>
 <body>
@@ -190,6 +228,7 @@ input[type="text"]:focus{border-color:var(--green);}
     <div class="nav-tab" onclick="showTab(this,'players')">Players &amp; Form</div>
     <div class="nav-tab" onclick="showTab(this,'strategy')">Strategy</div>
     <div class="nav-tab" onclick="showTab(this,'fixtures')">Fixtures</div>
+    <div class="nav-tab" onclick="showTab(this,'planner')">Planner</div>
     <div class="nav-tab" onclick="showTab(this,'snapshot')">Snapshot</div>
   </div>
 
@@ -247,6 +286,45 @@ input[type="text"]:focus{border-color:var(--green);}
     <div class="page">
       <div class="section-title">Fixture Difficulty — Next 6 GWs</div>
       <table class="fixture-table" id="fixture-table"></table>
+    </div>
+  </div>
+
+  <!-- PLANNER TAB -->
+  <div class="tab-content" id="tab-planner">
+    <div class="page" style="max-width:1200px;">
+      <!-- Top bar -->
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+        <div>
+          <div class="section-title" style="margin-bottom:0;border-bottom:none;">Lineup Planner</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px;">Drag players to swap. Change formation to reshuffle rows.</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;">Formation:</span>
+          <div id="planner-formations" style="display:flex;gap:5px;flex-wrap:wrap;"></div>
+          <button onclick="plannerReset()" style="background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--muted);font-size:11px;padding:5px 10px;cursor:pointer;">↺ Reset</button>
+        </div>
+      </div>
+      <!-- Projected points bar -->
+      <div id="planner-pts-bar" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-bottom:16px;"></div>
+      <!-- Main layout: pitch + sidebar -->
+      <div style="display:grid;grid-template-columns:1fr 260px;gap:14px;align-items:start;">
+        <!-- Pitch -->
+        <div class="pitch-wrap" id="planner-pitch" style="min-height:480px;user-select:none;"></div>
+        <!-- Sidebar: bench + transfers -->
+        <div>
+          <div class="section-title">Bench</div>
+          <div id="planner-bench" style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px;"></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <div class="section-title" style="margin-bottom:0;border-bottom:none;">Transfer options</div>
+            <input id="planner-search" type="text" placeholder="Search…" style="width:110px;font-size:11px;padding:4px 8px;" oninput="plannerFilterTransfers(this.value)">
+          </div>
+          <div id="planner-transfers" style="display:flex;flex-direction:column;gap:5px;max-height:340px;overflow-y:auto;"></div>
+        </div>
+      </div>
+      <!-- Drag hint -->
+      <div id="planner-hint" style="text-align:center;font-size:10px;color:var(--muted);margin-top:10px;display:none;">
+        Drop onto a player to swap · Only valid position swaps allowed
+      </div>
     </div>
   </div>
 
@@ -574,7 +652,9 @@ function renderAll(entry,picks,transfers,history,gwFixtures){
       </div>`).join('');
     }).join('');
 
-    const injStrip=pl.status!=='a'?`<div class="inj-strip">⚠ ${pl.news||'Availability concern'}</div>`:'';
+    const isInjured=pl.status==='i'||pl.status==='d'||pl.status==='s';
+    const injBadgeHtml=isInjured?` <span style="background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;text-transform:uppercase;letter-spacing:0.5px;vertical-align:middle;">Injury Time</span>`:'';
+    const injNewsHtml=isInjured&&pl.news?`<div style="font-size:10px;color:#fca5a5;margin-top:3px;">${pl.news}</div>`:'';
     const capStrip=(pick.is_captain||pick.is_vice_captain)?`<div class="cap-strip">${pick.is_captain?'Captain this week':'Vice-captain this week'} · Consider based on GW${currentGW} fixture: ${getFixStr(pl.team,gwFixtures)||'No fixture'}</div>`:'';
     const scorePct=Math.min(100,Math.round((score/12)*100));
 
@@ -626,11 +706,24 @@ function renderAll(entry,picks,transfers,history,gwFixtures){
 
     let xferAlt=null;
     let xferReason='';
+    let xferSubReason=''; // 'similar-pts' | 'cheapest' | 'best-available'
 
     if(isInjured){
-      // Injury always overrides best-in-pos — you must replace an injured player
-      const affordable=xferPool.filter(e=>e.cost<=budgetTenths).sort((a,b)=>b.score-a.score)[0];
-      xferAlt=affordable||null;
+      // Priority 1: same pos, in budget, within 1.5pts of injured player — prefer highest score
+      const withinPts=xferPool
+        .filter(e=>e.cost<=budgetTenths&&e.score>=score-SIMILARITY_THRESHOLD)
+        .sort((a,b)=>b.score-a.score);
+      if(withinPts.length){
+        xferAlt=withinPts[0];
+        xferSubReason='similar-pts';
+      } else {
+        // Priority 2: cheapest affordable with best score/£ value
+        const cheapest=xferPool
+          .filter(e=>e.cost<=budgetTenths)
+          .sort((a,b)=>(b.score/(b.cost/10))-(a.score/(a.cost/10)));
+        xferAlt=cheapest[0]||null;
+        xferSubReason=xferAlt?'cheapest':'none';
+      }
       xferReason='injury-replace';
     } else if(isBestInPos){
       // Best in position — never recommend transferring them out
@@ -652,12 +745,13 @@ function renderAll(entry,picks,transfers,history,gwFixtures){
       xferReason='upgrade';
     }
 
-    return`<div class="squad-card ${isBench?'bench-card':''}" data-role="${isBench?'bench':'xi'}" data-pos="pos-${pos}">
+    return`<div class="squad-card ${isBench?'bench-card':''} ${isInjured&&!isBench?'squad-card-injured':''}" data-role="${isBench?'bench':'xi'}" data-pos="pos-${pos}">
       <div class="squad-card-header">
         <div class="squad-card-pos ${pos}">${posLabel(pl.element_type)}</div>
         <div class="squad-card-info">
-          <div class="squad-card-name">${pl.web_name}${cap}${vice} ${statusBadge(pl)}</div>
-          <div class="squad-card-meta">${team?team.name:''} · ${stats.gwsPlayed} GWs · Avg: <strong style="color:var(--text)">${stats.avg}pts</strong> · Proj: <strong style="color:var(--green)">${stats.projection}pts</strong></div>
+          <div class="squad-card-name">${pl.web_name}${cap}${vice} ${statusBadge(pl)}${injBadgeHtml}</div>
+          ${injNewsHtml}
+          <div class="squad-card-meta" style="margin-top:${injNewsHtml?'4':'1'}px">${team?team.name:''} · ${stats.gwsPlayed} GWs · Avg: <strong style="color:var(--text)">${stats.avg}pts</strong> · Proj: <strong style="color:var(--green)">${stats.projection}pts</strong></div>
         </div>
         <div class="squad-card-price">£${price}m</div>
       </div>
@@ -670,35 +764,65 @@ function renderAll(entry,picks,transfers,history,gwFixtures){
         <div class="score-bar-wrap"><div class="score-bar" style="width:${scorePct}%;background:${score>=8?'var(--green)':score>=5?'#a3e635':score>=3?'#facc15':'#ef4444'}"></div></div>
         <div class="score-val ${scoreClass}">${score.toFixed(1)}</div>
       </div>
-      ${injStrip}${capStrip}
+      ${capStrip}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
-        <div style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:6px;padding:7px 9px;">
-          <div style="font-size:9px;color:var(--def);text-transform:uppercase;letter-spacing:0.7px;font-weight:600;margin-bottom:4px;">In your squad</div>
-          ${isBestInPos
-            ?(!samePosSorted.length
-              ?'<div style="font-size:10px;color:var(--muted);">Only '+posLabel(pl.element_type)+' in squad</div>'
-              :`<div style="font-size:10px;color:var(--green);font-weight:500;">Best ${posLabel(pl.element_type)} in squad</div>
-               <div style="font-size:10px;color:var(--muted);margin-top:2px;">No swap needed unless injured</div>`)
-            :`<div style="font-size:12px;font-weight:500;color:var(--text);">${squadAlt.pl.web_name}</div>
-              <div style="font-size:10px;color:var(--muted);">${squadAlt.team?squadAlt.team.short_name:''} · £${(squadAlt.pl.now_cost/10).toFixed(1)}m · ${squadAlt.isBench?'Bench':'XI'}</div>
-              <div style="font-size:10px;color:var(--muted);">Score: <span style="color:var(--green)">${squadAlt.score.toFixed(1)}</span> vs yours <span style="color:#ef4444">${score.toFixed(1)}</span> · +${(squadAlt.score-score).toFixed(1)} better</div>`
-          }
-        </div>
-        <div style="background:${(xferReason==='hold'||xferReason==='hold-best')?'rgba(255,255,255,0.02)':xferReason==='injury-replace'?'rgba(239,68,68,0.04)':'rgba(0,255,135,0.04)'};border:1px solid ${(xferReason==='hold'||xferReason==='hold-best')?'rgba(255,255,255,0.07)':xferReason==='injury-replace'?'rgba(239,68,68,0.2)':'rgba(0,255,135,0.15)'};border-radius:6px;padding:7px 9px;">
-          <div style="font-size:9px;color:${(xferReason==='hold'||xferReason==='hold-best')?'var(--muted)':xferReason==='injury-replace'?'#ef4444':'var(--green)'};text-transform:uppercase;letter-spacing:0.7px;font-weight:600;margin-bottom:4px;">${(xferReason==='hold'||xferReason==='hold-best')?'Transfer: Hold':xferReason==='injury-replace'?'Injury Cover':'Transfer Target'}</div>
-          ${xferReason==='hold-best'
-            ?`<div style="font-size:10px;color:var(--green);font-weight:500;">Best in position — do not sell</div>
-              <div style="font-size:10px;color:var(--muted);margin-top:2px;">Your top ${posLabel(pl.element_type).toLowerCase()} — keep unless injured</div>`
-            :xferReason==='hold'
-            ?`<div style="font-size:10px;color:var(--green);font-weight:500;">Above avg — keep</div>
-              <div style="font-size:10px;color:var(--muted);margin-top:2px;">No cheaper player within 1.5pts found</div>`
-            :xferAlt
-              ?`<div style="font-size:12px;font-weight:500;color:var(--text);">${xferAlt.pl.web_name}</div>
-                <div style="font-size:10px;color:var(--muted);">${xferAlt.team?xferAlt.team.short_name:''} · £${(xferAlt.pl.now_cost/10).toFixed(1)}m${xferAlt.saving>0?' · <span style="color:var(--green)">saves £'+xferAlt.saving.toFixed(1)+'m</span>':''}</div>
-                <div style="font-size:10px;color:var(--muted);">Score: <span style="color:${xferAlt.score>=score-1.5?'var(--green)':'#facc15'}">${xferAlt.score.toFixed(1)}</span>${xferReason==='value-swap'?' · Similar output, better value':xferReason==='upgrade'?' · Best score/£ upgrade':' · Best available cover'}</div>`
-              :`<div style="font-size:10px;color:var(--muted);">${isAboveAvg?'No cheaper similar option':'No affordable upgrade found'}</div>`
-          }
-        </div>
+        ${isInjured
+          // ── INJURED: left = best bench cover, right = suggested transfer in ──
+          ?`<div style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.2);border-radius:6px;padding:7px 9px;">
+              <div style="font-size:9px;color:var(--def);text-transform:uppercase;letter-spacing:0.7px;font-weight:600;margin-bottom:4px;">Bench Cover</div>
+              ${(()=>{
+                const benchCover=picks.picks
+                  .filter(p=>p.position>11)
+                  .map(p=>{const bp=getPlayer(p.element);return bp&&bp.element_type===pl.element_type?{pl:bp,score:playerScore(bp,currentGW,3).score,team:getTeam(bp.team)}:null;})
+                  .filter(Boolean)
+                  .sort((a,b)=>b.score-a.score)[0];
+                return benchCover
+                  ?`<div style="font-size:12px;font-weight:500;color:var(--text);">${benchCover.pl.web_name}</div>
+                    <div style="font-size:10px;color:var(--muted);">${benchCover.team?benchCover.team.short_name:''} · £${(benchCover.pl.now_cost/10).toFixed(1)}m</div>
+                    <div style="font-size:10px;color:var(--muted);">Score: <span style="color:#facc15">${benchCover.score.toFixed(1)}</span> · Start if ${pl.web_name} misses</div>
+                    <span style="display:inline-block;font-size:9px;padding:1px 5px;border-radius:3px;margin-top:3px;background:rgba(59,130,246,0.15);color:#93c5fd;">In your squad</span>`
+                  :`<div style="font-size:10px;color:var(--muted);">No ${posLabel(pl.element_type)} on bench</div>`;
+              })()}
+            </div>
+            <div style="background:rgba(239,68,68,0.05);border:1px solid rgba(239,68,68,0.25);border-radius:6px;padding:7px 9px;">
+              <div style="font-size:9px;color:#ef4444;text-transform:uppercase;letter-spacing:0.7px;font-weight:600;margin-bottom:4px;">Injury Time${xferSubReason==='similar-pts'?' · Similar pts':xferSubReason==='cheapest'?' · Best value':''}</div>
+              ${xferAlt
+                ?`<div style="font-size:12px;font-weight:500;color:var(--text);">${xferAlt.pl.web_name}</div>
+                  <div style="font-size:10px;color:var(--muted);">${xferAlt.team?xferAlt.team.short_name:''} · £${(xferAlt.pl.now_cost/10).toFixed(1)}m${xferAlt.saving>0?' · <span style="color:var(--green)">saves £'+xferAlt.saving.toFixed(1)+'m</span>':''}</div>
+                  <div style="font-size:10px;color:var(--muted);">Score: <span style="color:${xferAlt.score>=score-1.5?'var(--green)':'#facc15'}">${xferAlt.score.toFixed(1)}</span> · ${xferSubReason==='similar-pts'?'Within 1.5pts, in budget':xferSubReason==='cheapest'?'Best score/£ in budget':'Best available'}</div>
+                  <span style="display:inline-block;font-size:9px;padding:1px 5px;border-radius:3px;margin-top:3px;background:rgba(239,68,68,0.15);color:#fca5a5;">Transfer in</span>`
+                :`<div style="font-size:10px;color:var(--muted);">No affordable replacement found</div>`
+              }
+            </div>`
+          // ── NOT INJURED: original squad swap + transfer logic ──
+          :`<div style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:6px;padding:7px 9px;">
+              <div style="font-size:9px;color:var(--def);text-transform:uppercase;letter-spacing:0.7px;font-weight:600;margin-bottom:4px;">In your squad</div>
+              ${isBestInPos
+                ?(!samePosSorted.length
+                  ?'<div style="font-size:10px;color:var(--muted);">Only '+posLabel(pl.element_type)+' in squad</div>'
+                  :`<div style="font-size:10px;color:var(--green);font-weight:500;">Best ${posLabel(pl.element_type)} in squad</div>
+                   <div style="font-size:10px;color:var(--muted);margin-top:2px;">No swap needed unless injured</div>`)
+                :`<div style="font-size:12px;font-weight:500;color:var(--text);">${squadAlt.pl.web_name}</div>
+                  <div style="font-size:10px;color:var(--muted);">${squadAlt.team?squadAlt.team.short_name:''} · £${(squadAlt.pl.now_cost/10).toFixed(1)}m · ${squadAlt.isBench?'Bench':'XI'}</div>
+                  <div style="font-size:10px;color:var(--muted);">Score: <span style="color:var(--green)">${squadAlt.score.toFixed(1)}</span> vs yours <span style="color:#ef4444">${score.toFixed(1)}</span> · +${(squadAlt.score-score).toFixed(1)} better</div>`
+              }
+            </div>
+            <div style="background:${(xferReason==='hold'||xferReason==='hold-best')?'rgba(255,255,255,0.02)':'rgba(0,255,135,0.04)'};border:1px solid ${(xferReason==='hold'||xferReason==='hold-best')?'rgba(255,255,255,0.07)':'rgba(0,255,135,0.15)'};border-radius:6px;padding:7px 9px;">
+              <div style="font-size:9px;color:${(xferReason==='hold'||xferReason==='hold-best')?'var(--muted)':'var(--green)'};text-transform:uppercase;letter-spacing:0.7px;font-weight:600;margin-bottom:4px;">${(xferReason==='hold'||xferReason==='hold-best')?'Transfer: Hold':'Transfer Target'}</div>
+              ${xferReason==='hold-best'
+                ?`<div style="font-size:10px;color:var(--green);font-weight:500;">Best in position — do not sell</div>
+                  <div style="font-size:10px;color:var(--muted);margin-top:2px;">Your top ${posLabel(pl.element_type).toLowerCase()} — keep unless injured</div>`
+                :xferReason==='hold'
+                ?`<div style="font-size:10px;color:var(--green);font-weight:500;">Above avg — keep</div>
+                  <div style="font-size:10px;color:var(--muted);margin-top:2px;">No cheaper player within 1.5pts found</div>`
+                :xferAlt
+                  ?`<div style="font-size:12px;font-weight:500;color:var(--text);">${xferAlt.pl.web_name}</div>
+                    <div style="font-size:10px;color:var(--muted);">${xferAlt.team?xferAlt.team.short_name:''} · £${(xferAlt.pl.now_cost/10).toFixed(1)}m${xferAlt.saving>0?' · <span style="color:var(--green)">saves £'+xferAlt.saving.toFixed(1)+'m</span>':''}</div>
+                    <div style="font-size:10px;color:var(--muted);">Score: <span style="color:${xferAlt.score>=score-1.5?'var(--green)':'#facc15'}">${xferAlt.score.toFixed(1)}</span>${xferReason==='value-swap'?' · Similar output, better value':' · Best score/£ upgrade'}</div>`
+                  :`<div style="font-size:10px;color:var(--muted);">${isAboveAvg?'No cheaper similar option':'No affordable upgrade found'}</div>`
+              }
+            </div>`
+        }
       </div>
     </div>`;
   }).join('');
@@ -931,46 +1055,55 @@ function renderAll(entry,picks,transfers,history,gwFixtures){
   const ftAvailable=picks.entry_history.event_transfers_cost>0?1:
     Math.min(2,2-(picks.entry_history.event_transfers||0)+1);
 
-  function findReplacements(pl,isFreeTrans){
+  function findReplacements(pl,isFreeTrans,isInjured){
     const sellPrice=getSellPrice(pl);
-    const budget=sellPrice+Math.floor(bank*10); // total budget in tenths
-    const hitCost=isFreeTrans?0:4; // 4pt hit per extra transfer
-    return bootstrapData.elements
+    const budget=sellPrice+Math.floor(bank*10);
+    const hitCost=isFreeTrans?0:4;
+    const playerSc=playerScore(pl,currentGW,3).score;
+    const pool=bootstrapData.elements
       .filter(e=>{
         if(e.element_type!==pl.element_type)return false;
         if(e.id===pl.id)return false;
         if(e.now_cost>budget)return false;
         if(e.status==='u')return false;
-        // Exclude players already in squad
         if(picks.picks.some(p=>p.element===e.id))return false;
         return true;
       })
       .map(e=>{
         const{score}=playerScore(e,currentGW,3);
-        const netScore=score-(hitCost/2); // penalise hit transfers slightly
-        return{pl:e,score,netScore,cost:e.now_cost,change:e.now_cost-sellPrice,team:getTeam(e.team)};
-      })
-      .sort((a,b)=>b.netScore-a.netScore)
-      .slice(0,3);
+        const netScore=score-(hitCost/2);
+        const withinPts=Math.abs(score-playerSc)<=1.5;
+        return{pl:e,score,netScore,cost:e.now_cost,change:e.now_cost-sellPrice,team:getTeam(e.team),withinPts};
+      });
+    if(isInjured){
+      // For injuries: within-1.5pts candidates first (sorted by score), then best value
+      const similar=pool.filter(e=>e.withinPts).sort((a,b)=>b.score-a.score);
+      const rest=pool.filter(e=>!e.withinPts).sort((a,b)=>(b.score/(b.cost/10))-(a.score/(a.cost/10)));
+      return[...similar,...rest].slice(0,3);
+    }
+    return pool.sort((a,b)=>b.netScore-a.netScore).slice(0,3);
   }
 
-  // Score each XI player — worst 3 are transfer targets, skip best-in-position
+  // Score each XI player — injured first, then worst scorers; skip best-in-position unless injured
   const scoredXI=starters.map((pick,i)=>{
     const pl=getPlayer(pick.element);
     if(!pl)return null;
     const{score,form,avgFdr}=playerScore(pl,currentGW,3);
     const stats=getPlayerStats(pick.element);
-    // Determine if this player is best in their position across the full squad
     const samePosScores=picks.picks
       .filter(p=>p.element!==pick.element)
       .map(p=>{const alt=getPlayer(p.element);return alt&&alt.element_type===pl.element_type?playerScore(alt,currentGW,3).score:null;})
       .filter(s=>s!==null);
     const isBestInPos=!samePosScores.length||samePosScores.every(s=>s<=score);
     const isInjured=pl.status==='i'||pl.status==='d'||pl.status==='s';
-    // Only include as a candidate if injured OR not best in their position
     if(isBestInPos&&!isInjured)return null;
     return{pick,pl,score,form,avgFdr,team:getTeam(pl.team),stats,isBestInPos,isInjured};
-  }).filter(Boolean).sort((a,b)=>a.score-b.score);
+  }).filter(Boolean).sort((a,b)=>{
+    // Injured XI players always float to top as priority transfers
+    if(a.isInjured&&!b.isInjured)return-1;
+    if(!a.isInjured&&b.isInjured)return 1;
+    return a.score-b.score;
+  });
   const worstXI2=scoredXI.slice(0,3);
 
   function fdrMiniBoxes(fixes,count){
@@ -990,7 +1123,7 @@ function renderAll(entry,picks,transfers,history,gwFixtures){
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px;">
     ${worstXI2.map((c,i)=>{
       const isFree=i<ftAvailable;
-      const reps=findReplacements(c.pl,isFree);
+      const reps=findReplacements(c.pl,isFree,c.isInjured);
       const outFixes=getPlayerFixtures(c.pl.team,currentGW,3);
       const repHtml=reps.map((r,ri)=>{
         const inFixes=getPlayerFixtures(r.pl.team,currentGW,3);
@@ -1002,6 +1135,7 @@ function renderAll(entry,picks,transfers,history,gwFixtures){
             <span style="color:var(--green);font-size:11px;font-weight:600">↑ IN: ${r.pl.web_name}</span>
             <span style="font-size:10px;color:var(--muted)">${r.team?r.team.short_name:''}</span>
             ${ri===0?'<span style="margin-left:auto;font-size:9px;background:rgba(0,255,135,0.12);color:var(--green);padding:1px 5px;border-radius:3px;">Best pick</span>':''}
+            ${r.withinPts&&c.isInjured?'<span style="font-size:9px;background:rgba(0,255,135,0.1);color:var(--green);padding:1px 5px;border-radius:3px;">≈ Similar pts</span>':''}
           </div>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
             <div style="font-size:10px;color:var(--muted)">£${(r.pl.now_cost/10).toFixed(1)}m <span style="color:${costDiff>0?'#ef4444':'#a3e635'}">(${costStr})</span></div>
@@ -1011,8 +1145,9 @@ function renderAll(entry,picks,transfers,history,gwFixtures){
           </div>
         </div>`;
       }).join('');
-      return`<div class="strategy-card" style="border-color:${isFree?'rgba(0,255,135,0.12)':'rgba(239,68,68,0.12)'}">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+      return`<div class="strategy-card" style="border-color:${c.isInjured?'rgba(239,68,68,0.35)':isFree?'rgba(0,255,135,0.12)':'rgba(239,68,68,0.12)'}">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;">
+          ${c.isInjured?`<span style="font-size:10px;padding:2px 7px;border-radius:3px;font-weight:700;background:rgba(239,68,68,0.15);color:#ef4444;text-transform:uppercase;letter-spacing:0.5px;">🚑 Priority — Injury Time</span>`:''}
           <span style="font-size:10px;padding:2px 7px;border-radius:3px;font-weight:600;background:${isFree?'rgba(0,255,135,0.1)':'rgba(239,68,68,0.1)'};color:${isFree?'var(--green)':'#ef4444'}">${isFree?'FREE TRANSFER':'COSTS 4PTS'}</span>
         </div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
@@ -1096,6 +1231,8 @@ ${recentTransfers.length?recentTransfers.join('\n'):'  None'}
   document.getElementById('loading-panel').style.display='none';
   document.getElementById('dashboard').style.display='block';
   document.getElementById('switch-btn').style.display='block';
+  // Init planner tab with live data
+  plannerInit(picks, gwFixtures);
 }
 
 function filterCards(type){
@@ -1140,6 +1277,361 @@ function switchTeam(){
   document.getElementById('setup-panel').style.display='block';
   hideError();
 }
+
+
+// ─── PLANNER ─────────────────────────────────────────────────────────────────
+let plannerState = null; // { xi: [...], bench: [...], transfers: [...], formation: [d,m,f] }
+let plannerDragSrc = null; // { player, zone: 'xi'|'bench'|'xfer' }
+let plannerTransferCache = [];
+
+const FORMATIONS = [
+  [4,4,2],[4,3,3],[4,5,1],[3,5,2],[3,4,3],[5,3,2],[5,4,1],[5,2,3],[4,2,4]
+];
+
+function plannerProjectedPts(pl) {
+  if (!pl) return 0;
+  const {score} = playerScore(pl, currentGW, 1);
+  return Math.round(score * 10) / 10;
+}
+
+function plannerDetectFormation(xi) {
+  const defs = xi.filter(p => p.element_type === 2).length;
+  const mids = xi.filter(p => p.element_type === 3).length;
+  const fwds = xi.filter(p => p.element_type === 4).length;
+  return [defs, mids, fwds];
+}
+
+function plannerInit(picks, gwFixtures) {
+  if (!bootstrapData) return;
+  const starters = picks.picks.filter(p => p.position <= 11).map(p => {
+    const pl = getPlayer(p.element);
+    return {...pl, _captain: p.is_captain, _vice: p.is_vice_captain, _zone: 'xi', _new: false};
+  });
+  const bench = picks.picks.filter(p => p.position > 11).map(p => {
+    const pl = getPlayer(p.element);
+    return {...pl, _captain: false, _vice: false, _zone: 'bench', _new: false};
+  });
+
+  const [d,m,f] = plannerDetectFormation(starters.filter(p => p.element_type !== 1));
+
+  // Build transfer pool: top 60 players by total_points, not in squad, grouped by pos
+  const squadIds = new Set(picks.picks.map(p => p.element));
+  plannerTransferCache = [2,3,4].flatMap(et =>
+    bootstrapData.elements
+      .filter(e => e.element_type === et && !squadIds.has(e.id) && e.status !== 'u' && e.total_points > 0)
+      .sort((a,b) => b.total_points - a.total_points)
+      .slice(0, 40)
+      .map(e => ({...e, _zone: 'xfer', _new: false}))
+  );
+  // Add GK transfers too
+  plannerTransferCache = plannerTransferCache.concat(
+    bootstrapData.elements
+      .filter(e => e.element_type === 1 && !squadIds.has(e.id) && e.status !== 'u' && e.total_points > 0)
+      .sort((a,b) => b.total_points - a.total_points)
+      .slice(0, 10)
+      .map(e => ({...e, _zone: 'xfer', _new: false}))
+  );
+
+  plannerState = { xi: starters, bench, formation: [d, m, f], gwFixtures };
+  plannerRenderAll();
+}
+
+function plannerReset() {
+  if (!picksData) return;
+  plannerInit(picksData, plannerState?.gwFixtures || []);
+}
+
+function plannerTotalPts() {
+  if (!plannerState) return 0;
+  return plannerState.xi.reduce((sum, pl) => {
+    let pts = plannerProjectedPts(pl);
+    if (pl._captain) pts *= 2;
+    return sum + pts;
+  }, 0);
+}
+
+function plannerRenderPtsBar() {
+  const total = plannerTotalPts();
+  const cap = plannerState.xi.find(p => p._captain);
+  const fix = cap ? getFixStr(cap.team, plannerState.gwFixtures) : '—';
+  const transferCount = plannerState.xi.filter(p => p._new).length;
+  document.getElementById('planner-pts-bar').innerHTML = `
+    <div class="stat-card"><div class="label">Projected GW${currentGW}</div><div class="value green">${total.toFixed(1)}</div></div>
+    <div class="stat-card"><div class="label">Formation</div><div class="value" style="font-size:18px">1-${plannerState.formation.join('-')}</div></div>
+    <div class="stat-card"><div class="label">Captain</div><div class="value" style="font-size:14px;font-family:'DM Sans';font-weight:600">${cap ? cap.web_name : '—'}</div></div>
+    <div class="stat-card"><div class="label">Cap Fixture</div><div class="value" style="font-size:13px;font-family:'DM Sans'">${fix || 'No fix'}</div></div>
+    <div class="stat-card"><div class="label">Changes</div><div class="value ${transferCount > 0 ? 'amber' : ''}">${transferCount}</div></div>
+  `;
+}
+
+function plannerRenderFormations() {
+  const el = document.getElementById('planner-formations');
+  const [cd, cm, cf] = plannerState.formation;
+  el.innerHTML = FORMATIONS.map(([d,m,f]) => {
+    const active = d===cd && m===cm && f===cf;
+    return `<button class="formation-btn ${active?'active':''}" onclick="plannerSetFormation(${d},${m},${f})">${d}-${m}-${f}</button>`;
+  }).join('');
+}
+
+function plannerSetFormation(d, m, f) {
+  if (!plannerState) return;
+  const gk = plannerState.xi.filter(p => p.element_type === 1);
+  const defs = plannerState.xi.filter(p => p.element_type === 2);
+  const mids = plannerState.xi.filter(p => p.element_type === 3);
+  const fwds = plannerState.xi.filter(p => p.element_type === 4);
+  const allBench = [...plannerState.bench];
+
+  function adjustRow(current, target, pos) {
+    let row = [...current];
+    if (row.length === target) return { row, bench: [] };
+    const moved = [];
+    while (row.length > target) {
+      // Move worst scorer to bench
+      row.sort((a,b) => plannerProjectedPts(a) - plannerProjectedPts(b));
+      moved.push({...row.shift(), _zone: 'bench'});
+    }
+    while (row.length < target) {
+      // Pull best available from bench matching position
+      const idx = allBench.findIndex(p => p.element_type === pos);
+      if (idx >= 0) {
+        row.push({...allBench.splice(idx, 1)[0], _zone: 'xi'});
+      } else {
+        break; // can't fill — leave short
+      }
+    }
+    return { row, moved };
+  }
+
+  const rDef = adjustRow(defs, d, 2);
+  allBench.push(...(rDef.moved || []));
+  const rMid = adjustRow(mids, m, 3);
+  allBench.push(...(rMid.moved || []));
+  const rFwd = adjustRow(fwds, f, 4);
+  allBench.push(...(rFwd.moved || []));
+
+  plannerState.xi = [...gk, ...rDef.row, ...rMid.row, ...rFwd.row];
+  plannerState.bench = allBench;
+  plannerState.formation = [d, m, f];
+  plannerRenderAll();
+}
+
+function plannerCard(pl, zone, idx) {
+  const pts = plannerProjectedPts(pl);
+  const fix = getFixStr(pl.team, plannerState.gwFixtures);
+  const pos = posClass(pl.element_type);
+  const posColors = {gk:'var(--gk)',def:'var(--def)',mid:'var(--mid)',fwd:'var(--fwd)'};
+  const capBadge = pl._captain ? '<span class="pln-badge cap-b">©</span>' : '';
+  const viceBadge = pl._vice ? '<span class="pln-badge" style="background:#555;color:#fff">v</span>' : '';
+  const injBadge = pl.status !== 'a' ? '<span class="pln-badge inj-b">!</span>' : '';
+  const newBadge = pl._new ? '<span class="pln-badge new-b">NEW</span>' : '';
+  const finalPts = pl._captain ? pts * 2 : pts;
+  return `<div class="pln-card ${pl._captain?'captain':''} ${pl._new?'transferred-in':''}"
+    draggable="true"
+    data-zone="${zone}" data-idx="${idx}" data-pos="${pl.element_type}"
+    ondragstart="plannerDragStart(event)"
+    ondragover="plannerDragOver(event)"
+    ondragleave="plannerDragLeave(event)"
+    ondrop="plannerDrop(event)"
+    style="border-${zone==='xi'?'bottom':'top'}-color:${posColors[pos] || 'var(--border)'};border-width:1px;"
+  >
+    <div style="width:5px;height:5px;border-radius:50%;background:${posColors[pos]};margin:0 auto 3px;"></div>
+    <div class="pln-name">${pl.web_name}</div>
+    <div class="pln-pts">${finalPts.toFixed(1)}${pl._captain?' (2×)':''}</div>
+    <div class="pln-price">£${(pl.now_cost/10).toFixed(1)}m</div>
+    <div class="pln-fix">${fix || 'No fix'}</div>
+    <div>${capBadge}${viceBadge}${injBadge}${newBadge}</div>
+  </div>`;
+}
+
+function plannerRenderPitch() {
+  const {xi, formation} = plannerState;
+  const [d, m, f] = formation;
+  const gks  = xi.filter(p => p.element_type === 1);
+  const defs = xi.filter(p => p.element_type === 2);
+  const mids = xi.filter(p => p.element_type === 3);
+  const fwds = xi.filter(p => p.element_type === 4);
+
+  function row(players, label, globalOffset) {
+    return `<div class="pln-pos-label">${label}</div>
+    <div class="pln-pos-row">${players.map((pl, i) => plannerCard(pl, 'xi', globalOffset + i)).join('')}</div>`;
+  }
+
+  document.getElementById('planner-pitch').innerHTML = `
+    <div class="pitch-lines"><div class="pitch-line"></div><div class="pitch-line"></div><div class="pitch-line"></div><div class="pitch-line"></div></div>
+    <div class="pitch-circle"></div>
+    <div style="position:relative;z-index:1;padding:8px 4px;">
+      ${row(gks,'Goalkeeper', 0)}
+      ${row(defs,'Defenders', gks.length)}
+      ${row(mids,'Midfielders', gks.length + defs.length)}
+      ${row(fwds,'Forwards', gks.length + defs.length + mids.length)}
+    </div>
+    <div style="text-align:center;font-size:9px;color:rgba(255,255,255,0.18);letter-spacing:2px;text-transform:uppercase;padding:4px 0 2px;">Drag to swap · Drop from bench or transfers</div>
+  `;
+  document.getElementById('planner-pitch').ondragover = e => e.preventDefault();
+}
+
+function plannerRenderBench() {
+  const {bench} = plannerState;
+  const posColors = {1:'var(--gk)',2:'var(--def)',3:'var(--mid)',4:'var(--fwd)'};
+  document.getElementById('planner-bench').innerHTML = bench.map((pl, i) => {
+    const pts = plannerProjectedPts(pl);
+    const pos = posLabel(pl.element_type);
+    return `<div class="bench-plr ${pl._new?'transferred-in':''}"
+      draggable="true" data-zone="bench" data-idx="${i}" data-pos="${pl.element_type}"
+      ondragstart="plannerDragStart(event)"
+      ondragover="plannerDragOver(event)"
+      ondragleave="plannerDragLeave(event)"
+      ondrop="plannerDrop(event)"
+    >
+      <div class="b-pos" style="background:${posColors[pl.element_type]}22;color:${posColors[pl.element_type]}">${pos}</div>
+      <div>
+        <div class="b-name">${pl.web_name} ${pl._new?'<span style="font-size:9px;color:var(--green)">(NEW)</span>':''}</div>
+        <div class="b-meta">${getTeam(pl.team)?.short_name||''} · £${(pl.now_cost/10).toFixed(1)}m · ${pl.status!=='a'?'⚠ ':''}</div>
+      </div>
+      <div class="b-pts">${pts.toFixed(1)}</div>
+    </div>`;
+  }).join('') || '<div style="font-size:11px;color:var(--muted);padding:8px 0">No bench players</div>';
+}
+
+function plannerRenderTransfers(filter='') {
+  const posColors = {1:'var(--gk)',2:'var(--def)',3:'var(--mid)',4:'var(--fwd)'};
+  const f = filter.toLowerCase();
+  const list = plannerTransferCache
+    .filter(pl => !f || pl.web_name.toLowerCase().includes(f) || (getTeam(pl.team)?.short_name||'').toLowerCase().includes(f))
+    .sort((a,b) => plannerProjectedPts(b) - plannerProjectedPts(a))
+    .slice(0, 40);
+
+  document.getElementById('planner-transfers').innerHTML = list.map((pl, i) => {
+    const pts = plannerProjectedPts(pl);
+    const pos = posLabel(pl.element_type);
+    const fix = getFixStr(pl.team, plannerState.gwFixtures);
+    return `<div class="xfer-plr"
+      draggable="true" data-zone="xfer" data-xferid="${pl.id}" data-pos="${pl.element_type}"
+      ondragstart="plannerDragStart(event)"
+    >
+      <div class="x-pos" style="background:${posColors[pl.element_type]}22;color:${posColors[pl.element_type]}">${pos}</div>
+      <div>
+        <div class="x-name">${pl.web_name}</div>
+        <div class="x-meta">${getTeam(pl.team)?.short_name||''} · £${(pl.now_cost/10).toFixed(1)}m · ${fix||'No fix'}</div>
+      </div>
+      <div class="x-pts">${pts.toFixed(1)}</div>
+    </div>`;
+  }).join('') || '<div style="font-size:11px;color:var(--muted);padding:8px 0">No results</div>';
+}
+
+function plannerFilterTransfers(val) {
+  plannerRenderTransfers(val);
+}
+
+function plannerRenderAll() {
+  plannerRenderPtsBar();
+  plannerRenderFormations();
+  plannerRenderPitch();
+  plannerRenderBench();
+  plannerRenderTransfers(document.getElementById('planner-search')?.value || '');
+  document.getElementById('planner-hint').style.display = 'block';
+}
+
+// ── Drag & Drop ──────────────────────────────────────────────────────────────
+function plannerDragStart(e) {
+  const el = e.currentTarget;
+  const zone = el.dataset.zone;
+  const idx = parseInt(el.dataset.idx);
+  const pos = parseInt(el.dataset.pos);
+
+  if (zone === 'xi') {
+    plannerDragSrc = { player: {...plannerState.xi[idx]}, zone: 'xi', idx };
+  } else if (zone === 'bench') {
+    plannerDragSrc = { player: {...plannerState.bench[idx]}, zone: 'bench', idx };
+  } else if (zone === 'xfer') {
+    const pid = parseInt(el.dataset.xferid);
+    const pl = plannerTransferCache.find(p => p.id === pid);
+    plannerDragSrc = { player: {...pl, _new: true, _zone:'xfer'}, zone: 'xfer', idx: -1 };
+  }
+  el.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  setTimeout(() => el.classList.remove('dragging'), 0);
+}
+
+function plannerCanSwap(srcPos, tgtPos, tgtZone) {
+  // GKs can only swap with GKs
+  if (srcPos === 1 || tgtPos === 1) return srcPos === tgtPos;
+  // From xfer: any outfield can go to any outfield slot
+  // From bench/xi: same position required for formation integrity
+  return true;
+}
+
+function plannerDragOver(e) {
+  e.preventDefault();
+  if (!plannerDragSrc) return;
+  const el = e.currentTarget;
+  const tgtPos = parseInt(el.dataset.pos);
+  const ok = plannerCanSwap(plannerDragSrc.player.element_type, tgtPos, el.dataset.zone);
+  el.classList.remove('drag-over','invalid-over');
+  el.classList.add(ok ? 'drag-over' : 'invalid-over');
+}
+
+function plannerDragLeave(e) {
+  e.currentTarget.classList.remove('drag-over','invalid-over');
+}
+
+function plannerDrop(e) {
+  e.preventDefault();
+  const el = e.currentTarget;
+  el.classList.remove('drag-over','invalid-over');
+  if (!plannerDragSrc) return;
+
+  const tgtZone = el.dataset.zone;
+  const tgtIdx = parseInt(el.dataset.idx);
+  const tgtPos = parseInt(el.dataset.pos);
+  const src = plannerDragSrc;
+  plannerDragSrc = null;
+
+  if (!plannerCanSwap(src.player.element_type, tgtPos, tgtZone)) return;
+
+  // Get target player
+  let tgtPlayer;
+  if (tgtZone === 'xi') tgtPlayer = {...plannerState.xi[tgtIdx]};
+  else if (tgtZone === 'bench') tgtPlayer = {...plannerState.bench[tgtIdx]};
+  else return;
+
+  // Perform swap
+  if (src.zone === 'xi' && tgtZone === 'xi') {
+    plannerState.xi[src.idx] = tgtPlayer;
+    plannerState.xi[tgtIdx] = src.player;
+  } else if (src.zone === 'bench' && tgtZone === 'xi') {
+    plannerState.xi[tgtIdx] = {...src.player, _zone:'xi'};
+    plannerState.bench[src.idx] = {...tgtPlayer, _zone:'bench'};
+  } else if (src.zone === 'xi' && tgtZone === 'bench') {
+    plannerState.bench[tgtIdx] = {...src.player, _zone:'bench'};
+    plannerState.xi[src.idx] = {...tgtPlayer, _zone:'xi'};
+  } else if (src.zone === 'bench' && tgtZone === 'bench') {
+    plannerState.bench[src.idx] = tgtPlayer;
+    plannerState.bench[tgtIdx] = src.player;
+  } else if (src.zone === 'xfer' && tgtZone === 'xi') {
+    // Transfer in: replace xi player, push them to bench
+    const displaced = {...plannerState.xi[tgtIdx], _zone:'bench'};
+    plannerState.xi[tgtIdx] = {...src.player, _zone:'xi'};
+    // Remove from transfer cache
+    plannerTransferCache = plannerTransferCache.filter(p => p.id !== src.player.id);
+    // Add displaced back to transfer pool
+    const wasXfer = displaced._new;
+    if (wasXfer) {
+      plannerTransferCache.push({...displaced, _zone:'xfer', _new:false});
+    } else {
+      plannerState.bench.push(displaced);
+    }
+  } else if (src.zone === 'xfer' && tgtZone === 'bench') {
+    const displaced = {...plannerState.bench[tgtIdx], _zone:'xfer'};
+    plannerState.bench[tgtIdx] = {...src.player, _zone:'bench'};
+    plannerTransferCache = plannerTransferCache.filter(p => p.id !== src.player.id);
+    if (!displaced._new) plannerTransferCache.push({...displaced, _zone:'xfer', _new:false});
+  }
+
+  plannerRenderAll();
+}
+
+// Hook planner init into the data load — called at end of renderAll above
 
 window.addEventListener('load',()=>{
   const saved=localStorage.getItem('fpl_team_id');

@@ -513,7 +513,7 @@ function renderAll(entry,picks,transfers,history,gwFixtures){
     const {score,form,avgFdr}=playerScore(pl,currentGW,3);
     const scoreClass=formClass(score/2);
     const chartId='chart-'+pick.element+'-'+idx;
-    chartIds.push({id:chartId,stats,playerId:pick.element});
+    chartIds.push({id:chartId,stats,playerId:pick.element,posType:pl.element_type});
     const cap=pick.is_captain?' <span style="background:var(--gk);color:#000;font-size:9px;padding:1px 4px;border-radius:2px;font-weight:700">©</span>':'';
     const vice=pick.is_vice_captain?' <span style="background:#555;color:#fff;font-size:9px;padding:1px 4px;border-radius:2px;">v</span>':'';
 
@@ -596,13 +596,26 @@ function renderAll(entry,picks,transfers,history,gwFixtures){
   document.getElementById('squad-cards').innerHTML=cardHtml;
 
   // Render enhanced charts with season avg line + axes
+  // Compute shared Y-axis max per position so all players in same pos use same scale
   setTimeout(()=>{
-    chartIds.forEach(({id,stats})=>{
+    const posMaxMap={};
+    chartIds.forEach(({stats,posType})=>{
+      if(!stats.pts.length)return;
+      const localMax=Math.max(...stats.pts,stats.avg,2);
+      posMaxMap[posType]=Math.max(posMaxMap[posType]||0,localMax);
+    });
+    // Round up to nearest even number + 2 buffer per position
+    [1,2,3,4].forEach(pt=>{
+      if(posMaxMap[pt])posMaxMap[pt]=Math.ceil((posMaxMap[pt]+2)/2)*2;
+    });
+    const posNames={1:'GK',2:'DEF',3:'MID',4:'FWD'};
+
+    chartIds.forEach(({id,stats,posType})=>{
       const canvas=document.getElementById(id);
       if(!canvas||!stats.pts.length)return;
       const pts=stats.pts;
       const avg=stats.avg;
-      const maxVal=Math.max(...pts,avg,2)+2;
+      const maxVal=posMaxMap[posType]||Math.ceil((Math.max(...pts,avg,2)+2)/2)*2;
       // Color each point: green>=avg, amber=within 2, red<avg-2
       const pointColors=pts.map(p=>p>=avg?'#00ff87':p>=avg-2?'#facc15':'#ef4444');
       const pointSizes=pts.map(p=>p>=10?5:p>=6?4:3);
@@ -702,10 +715,17 @@ function renderAll(entry,picks,transfers,history,gwFixtures){
               display:true,
               min:0,
               max:maxVal,
+              title:{
+                display:true,
+                text:posNames[posType]+' scale (0–'+maxVal+')',
+                color:'rgba(255,255,255,0.2)',
+                font:{size:7},
+                padding:{bottom:2}
+              },
               ticks:{
                 color:'rgba(255,255,255,0.3)',
                 font:{size:8},
-                stepSize:2,
+                stepSize:maxVal<=12?2:maxVal<=20?4:6,
                 callback:v=>v+'pts'
               },
               grid:{color:'rgba(255,255,255,0.04)'},
